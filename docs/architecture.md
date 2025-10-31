@@ -57,7 +57,7 @@ Představuje fyzické běhové entity (např. Docker kontejnery, služby).
 
 Každý kontejner je samostatně nasaditelný (Docker image):
 
-* `frontend` – statická React app (Vite build, hostovaná v CDN)
+* `frontend` – **Next.js** aplikace (React framework, Vite build není potřeba, hostovaná v CDN nebo přes Node/nginx)
 * `backend-api` – FastAPI (Python 3.12)
 * `postgres` – relační databáze
 * `minio` – objektové úložiště pro ciphertexty
@@ -71,7 +71,9 @@ Tady rozbijeme *frontend* i *backend* na jednotlivé komponenty, které spolu ko
 
 ---
 
-### 🖥️ FRONTEND (React / TypeScript)
+### 🖥️ FRONTEND (**Next.js / TypeScript**)
+
+Frontend je postavený na frameworku **Next.js** (React), což umožňuje server-side rendering, API routes, optimalizaci performance a lepší DX.
 
 #### 🔐 Crypto Engine (core)
 
@@ -198,29 +200,30 @@ Tady rozbijeme *frontend* i *backend* na jednotlivé komponenty, které spolu ko
 
 ## ⚙️ 4️⃣ ÚROVEŇ: MODULES (v kódu)
 
-### Frontend (TypeScript Monorepo struktura)
+### Frontend (**Next.js TypeScript Monorepo struktura**)
 
 ```
 src/
-├── app/
-│   ├── routes/
-│   │   ├── auth/
-│   │   ├── notes/
-│   │   ├── files/
-│   │   └── share/
-│   ├── components/
-│   ├── contexts/
-│   │   └── CryptoContext.tsx
-│   ├── hooks/
-│   └── utils/
-│       ├── crypto/
-│       ├── api/
-│       └── storage/
-├── workers/
-│   ├── encryptionWorker.ts
-│   └── syncWorker.ts
-└── index.tsx
+├── app/                # Next.js App Router (stránky, layouty)
+│   ├── page.tsx        # Root stránka
+│   ├── layout.tsx      # Globální layout
+│   ├── auth/           # /auth (login, register, 2FA, recovery)
+│   ├── notes/          # /notes (seznam, editor, viewer)
+│   ├── files/          # /files (upload, viewer)
+│   ├── share/          # /share (sdílení)
+├── components/         # UI komponenty (formuláře, dialogy, seznamy)
+├── contexts/           # React contexty (např. CryptoContext.tsx)
+├── hooks/              # Custom React hooky
+├── lib/                # Utility (crypto, api, storage, helpers)
+│   ├── crypto/
+│   ├── api/
+│   └── storage/
+├── workers/            # Web/Service workery (encryptionWorker.ts, syncWorker.ts)
+├── public/             # Statické soubory (ikony, manifest, obrázky)
+└── types/              # Typy a rozhraní (TypeScript)
 ```
+
+> Next.js používá složku `app/` pro App Router (moderní routing), případně `pages/` pro starší Pages Router. API routes lze umístit do `app/api/` nebo `pages/api/`.
 
 ### Backend (Python / FastAPI)
 
