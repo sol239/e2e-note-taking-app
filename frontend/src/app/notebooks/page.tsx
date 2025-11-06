@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getNotebooks, createNotebook, NotebookConnector } from '../../api/auth';
-import { LogOut } from 'lucide-react';
+import { getNotebooks, createNotebook, deleteNotebook, NotebookConnector } from '../../api/auth';
+import { LogOut, Trash2 } from 'lucide-react';
 
 export default function NotebooksPage() {
   const [notebooks, setNotebooks] = useState<NotebookConnector[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [notebookToDelete, setNotebookToDelete] = useState<NotebookConnector | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchNotebooks = async () => {
     try {
@@ -33,6 +36,31 @@ export default function NotebooksPage() {
       setError(err instanceof Error ? err.message : 'Failed to create notebook');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const openDeleteModal = (connector: NotebookConnector) => {
+    setNotebookToDelete(connector);
+    setDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setNotebookToDelete(null);
+  };
+
+  const handleDeleteNotebook = async () => {
+    if (!notebookToDelete) return;
+    
+    setDeleting(true);
+    try {
+      await deleteNotebook(notebookToDelete.notebook.id);
+      await fetchNotebooks(); // Refresh the list
+      closeDeleteModal();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete notebook');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -121,25 +149,77 @@ export default function NotebooksPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {notebooks.map((connector) => (
-              <div key={connector.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <Link
+                key={connector.id}
+                href={`/notebooks/${connector.notebook.id}`}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow block"
+              >
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 truncate">{connector.notebook.name}</h3>
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
+                  <h3 className="text-lg font-semibold text-gray-900 truncate flex-1 mr-2">{connector.notebook.name}</h3>
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openDeleteModal(connector);
+                      }}
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-all duration-200"
+                      title="Delete notebook"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
                 <p className="text-gray-600 text-sm mb-4">Click to open this notebook</p>
-                <Link
-                  href={`/notebooks/${connector.notebook.id}`}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                >
+                <span className="text-blue-600 hover:text-blue-800 text-sm font-medium">
                   Open Notebook →
-                </Link>
-              </div>
+                </span>
+              </Link>
             ))}
           </div>
         )}
       </main>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Delete Notebook</h2>
+            </div>
+            
+            <p className="text-gray-600 mb-2">
+              Are you sure you want to delete <span className="font-semibold text-gray-900">{notebookToDelete?.notebook.name}</span>?
+            </p>
+            <p className="text-sm text-red-600 mb-6">
+              This action cannot be undone. All blocks and content in this notebook will be permanently deleted.
+            </p>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={closeDeleteModal}
+                disabled={deleting}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteNotebook}
+                disabled={deleting}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
