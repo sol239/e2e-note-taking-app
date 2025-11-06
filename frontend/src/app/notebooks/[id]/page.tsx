@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getNotebookBlocks, getNotebooks, updateNotebook } from '../../../api/auth';
+import { getNotebookBlocks, getNotebooks, updateNotebook, updateBlock, createBlock } from '../../../api/auth';
 import NoteEditor from '../../../components/NoteEditor';
 import { Block, BlockType } from '../../../models/Block';
 import { Check, X, Loader2 } from 'lucide-react';
@@ -21,6 +21,7 @@ export default function NotebookPage() {
   const [editingName, setEditingName] = useState('');
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
   const [blockSyncStates, setBlockSyncStates] = useState<Map<string, 'pending' | 'syncing' | 'synced' | 'error'>>(new Map());
+  const [existingBlockIds, setExistingBlockIds] = useState<Set<string>>(new Set());
   const syncTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const syncQueueRef = useRef<Set<string>>(new Set());
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -50,6 +51,9 @@ export default function NotebookPage() {
           )
         );
         setBlocks(convertedBlocks);
+        
+        // Track which blocks exist in the database
+        setExistingBlockIds(new Set(convertedBlocks.map(b => b.id)));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load notebook');
       } finally {
@@ -129,8 +133,28 @@ export default function NotebookPage() {
 
       try {
         console.log('Syncing block:', block);
-        // Simulate async sync operation
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Check if block exists in database
+        if (existingBlockIds.has(blockId)) {
+          // Update existing block
+          await updateBlock(notebookId, blockId, {
+            type: block.type,
+            content: block.content,
+            metadata: block.metadata,
+            settings: block.settings,
+          });
+        } else {
+          // Create new block
+          const createdBlock = await createBlock(notebookId, {
+            id: blockId,
+            type: block.type,
+            content: block.content,
+            metadata: block.metadata,
+            settings: block.settings,
+          });
+          // Add to existing blocks set
+          setExistingBlockIds(prev => new Set([...prev, createdBlock.id]));
+        }
 
         setBlockSyncStates(prev => {
           const newStates = new Map(prev);

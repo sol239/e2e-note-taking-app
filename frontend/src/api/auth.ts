@@ -162,3 +162,47 @@ export async function getNotebookBlocks(notebookId: string): Promise<BlockConnec
 
   return response.json();
 }
+
+export async function createBlock(notebookId: string, blockData: Partial<Block>): Promise<Block> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    throw new Error('No auth token found');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/notebooks/${notebookId}/blocks/`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(blockData),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to create block');
+  }
+
+  return response.json();
+}
+
+export async function updateBlock(notebookId: string, blockId: string, blockData: Partial<Block>): Promise<Block> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    throw new Error('No auth token found');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/notebooks/${notebookId}/blocks/${blockId}/`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Token ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(blockData),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to update block');
+  }
+
+  return response.json();
+}

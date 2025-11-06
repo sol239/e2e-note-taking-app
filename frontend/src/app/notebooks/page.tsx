@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getNotebooks, createNotebook, NotebookConnector } from '../../api/auth';
+import { LogOut } from 'lucide-react';
 
 export default function NotebooksPage() {
   const [notebooks, setNotebooks] = useState<NotebookConnector[]>([]);
@@ -77,9 +78,10 @@ export default function NotebooksPage() {
                   localStorage.removeItem('authToken');
                   window.location.href = '/login';
                 }}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
+                className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
               >
-                Logout
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
               </button>
             </div>
           </div>
