@@ -15,6 +15,7 @@ export enum BlockType {
   VIDEO = 'video',
   AUDIO = 'audio',
   GRID = 'grid',
+  NOTEBOOK_LINK = 'notebook_link',
 }
 
 export interface IBlock {
@@ -33,6 +34,8 @@ export interface IBlock {
     gridRows?: number; // For grid blocks
     gridCols?: number; // For grid blocks
     gridCells?: Record<string, string[]>; // For grid blocks - cell key to block IDs
+    notebookId?: string; // For notebook link blocks
+    notebookName?: string; // For notebook link blocks
   };
   settings?: {
     styling?: {
@@ -62,6 +65,8 @@ export class Block implements IBlock {
     gridRows?: number;
     gridCols?: number;
     gridCells?: Record<string, string[]>;
+    notebookId?: string;
+    notebookName?: string;
   };
   settings?: {
     styling?: {
@@ -90,6 +95,8 @@ export class Block implements IBlock {
       gridRows?: number;
       gridCols?: number;
       gridCells?: Record<string, string[]>;
+      notebookId?: string;
+      notebookName?: string;
     },
     settings?: {
       styling?: {

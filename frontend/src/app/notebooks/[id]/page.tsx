@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getNotebookBlocks, getNotebooks, updateNotebook, updateBlock, createBlock, deleteBlock } from '../../../api/auth';
+import { getNotebookBlocks, getNotebooks } from '../../../api/auth';
 import NoteEditor from '../../../components/NoteEditor';
 import { Block, BlockType } from '../../../models/Block';
 import { Check, X, Loader2 } from 'lucide-react';
+import SyncWorker from '../../../utils/SyncWorker';
 
 export default function NotebookPage() {
   const params = useParams();
@@ -23,11 +24,8 @@ export default function NotebookPage() {
   const [blockSyncStates, setBlockSyncStates] = useState<Map<string, 'pending' | 'syncing' | 'synced' | 'error'>>(new Map());
   const [existingBlockIds, setExistingBlockIds] = useState<Set<string>>(new Set());
   const [previousBlocks, setPreviousBlocks] = useState<Map<string, Block>>(new Map());
-  const syncTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
-  const syncQueueRef = useRef<Set<string>>(new Set());
   const nameInputRef = useRef<HTMLInputElement>(null);
-
-  const SYNC_DELAY_MS = 3000; // 3 seconds
+  const syncWorker = useRef(SyncWorker.getInstance());
 
   useEffect(() => {
     const fetchNotebookData = async () => {
@@ -74,25 +72,48 @@ export default function NotebookPage() {
     }
   }, [notebookId]);
 
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    const currentTimeouts = syncTimeoutsRef.current;
-    return () => {
-      currentTimeouts.forEach(timeout => clearTimeout(timeout));
-    };
-  }, []);
+  const queueNotebookNameSync = (newName: string) => {
+    syncWorker.current.queueNotebookNameSync(
+      notebookId,
+      newName,
+      (status) => {
+        if (status === 'syncing' || status === 'pending') {
+          setSyncStatus('syncing');
+        } else if (status === 'error') {
+          setSyncStatus('error');
+        } else {
+          setSyncStatus('synced');
+        }
+      }
+    );
+  };
 
   const handleBlocksChange = (newBlocks: Block[]) => {
-    // Detect deleted blocks
+    // Check if first block is heading1 and sync with notebook name
+    if (newBlocks.length > 0 && newBlocks[0].type === BlockType.HEADING1) {
+      const firstBlockContent = newBlocks[0].content;
+      if (firstBlockContent !== notebookName) {
+        // Update notebook name to match first heading (with delay)
+        setNotebookName(firstBlockContent);
+        queueNotebookNameSync(firstBlockContent);
+      }
+    }
+    
+    // Detect deleted blocks (skip the first block if it's heading1)
     const newBlockIds = new Set(newBlocks.map(b => b.id));
-    const deletedBlockIds = Array.from(previousBlocks.keys()).filter(id => !newBlockIds.has(id));
+    const deletedBlockIds = Array.from(previousBlocks.keys()).filter(id => {
+      // Don't allow deletion of first heading1 block
+      const block = previousBlocks.get(id);
+      const isFirstHeading = block && block.type === BlockType.HEADING1 && Array.from(previousBlocks.keys())[0] === id;
+      return !newBlockIds.has(id) && !isFirstHeading;
+    });
     
     // Handle deletions
     if (deletedBlockIds.length > 0) {
       deletedBlockIds.forEach(async (blockId) => {
         if (existingBlockIds.has(blockId)) {
           try {
-            await deleteBlock(notebookId, blockId);
+            await syncWorker.current.queueBlockDelete(notebookId, blockId);
             console.log('Deleted block from backend:', blockId);
             setExistingBlockIds(prev => {
               const newSet = new Set(prev);
@@ -145,102 +166,37 @@ export default function NotebookPage() {
   };
 
   const queueBlocksForSync = (blocksToSync: Block[]) => {
-    // Clear existing timeouts only for blocks being synced
     blocksToSync.forEach(block => {
-      const existingTimeout = syncTimeoutsRef.current.get(block.id);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-      }
-    });
-
-    // Reset sync states for changed blocks
-    setBlockSyncStates(prev => {
-      const newStates = new Map(prev);
-      blocksToSync.forEach(block => {
-        newStates.set(block.id, 'pending');
-      });
-      return newStates;
-    });
-
-    // Add blocks to queue
-    blocksToSync.forEach(block => {
-      syncQueueRef.current.add(block.id);
-    });
-
-    // Set new timeouts for each changed block
-    blocksToSync.forEach(block => {
-      const timeout = setTimeout(() => {
-        processSyncQueue();
-      }, SYNC_DELAY_MS);
-
-      syncTimeoutsRef.current.set(block.id, timeout);
-    });
-
-    updateOverallSyncStatus();
-  };
-
-  const processSyncQueue = async () => {
-    if (syncQueueRef.current.size === 0) return;
-
-    const blockIdsToSync = Array.from(syncQueueRef.current);
-    syncQueueRef.current.clear();
-
-    // Update states to syncing
-    setBlockSyncStates(prev => {
-      const newStates = new Map(prev);
-      blockIdsToSync.forEach(id => {
-        newStates.set(id, 'syncing');
-      });
-      return newStates;
-    });
-    updateOverallSyncStatus();
-
-    // Process each block
-    const syncPromises = blockIdsToSync.map(async (blockId) => {
-      const block = blocks.find(b => b.id === blockId);
-      if (!block) return;
-
-      try {
-        console.log('Syncing block:', block);
-        
-        // Check if block exists in database
-        if (existingBlockIds.has(blockId)) {
-          // Update existing block
-          await updateBlock(notebookId, blockId, {
-            type: block.type,
-            content: block.content,
-            metadata: block.metadata,
-            settings: block.settings,
+      const isNew = !existingBlockIds.has(block.id);
+      
+      syncWorker.current.queueBlockSync(
+        notebookId,
+        block,
+        isNew,
+        (blockId, status) => {
+          setBlockSyncStates(prev => {
+            const newStates = new Map(prev);
+            newStates.set(blockId, status);
+            return newStates;
           });
-        } else {
-          // Create new block
-          const createdBlock = await createBlock(notebookId, {
-            id: blockId,
-            type: block.type,
-            content: block.content,
-            metadata: block.metadata,
-            settings: block.settings,
-          });
-          // Add to existing blocks set
-          setExistingBlockIds(prev => new Set([...prev, createdBlock.id]));
+          
+          // If block was created, add to existing blocks set
+          if (status === 'synced' && isNew) {
+            setExistingBlockIds(prev => new Set([...prev, blockId]));
+          }
+          
+          updateOverallSyncStatus();
         }
-
-        setBlockSyncStates(prev => {
-          const newStates = new Map(prev);
-          newStates.set(blockId, 'synced');
-          return newStates;
-        });
-      } catch (error) {
-        console.error('Sync error for block:', blockId, error);
-        setBlockSyncStates(prev => {
-          const newStates = new Map(prev);
-          newStates.set(blockId, 'error');
-          return newStates;
-        });
-      }
+      );
+      
+      // Immediately set to pending
+      setBlockSyncStates(prev => {
+        const newStates = new Map(prev);
+        newStates.set(block.id, 'pending');
+        return newStates;
+      });
     });
-
-    await Promise.all(syncPromises);
+    
     updateOverallSyncStatus();
   };
 
@@ -268,12 +224,25 @@ export default function NotebookPage() {
 
   const handleNameSave = async () => {
     if (editingName.trim() && editingName.trim() !== notebookName) {
-      try {
-        await updateNotebook(notebookId, editingName.trim());
-        setNotebookName(editingName.trim());
-      } catch (err) {
-        console.error('Failed to update notebook name:', err);
-        // Could show an error message to user
+      setNotebookName(editingName.trim());
+      
+      // Queue notebook name sync with delay
+      queueNotebookNameSync(editingName.trim());
+      
+      // Also update the first heading1 block if it exists
+      if (blocks.length > 0 && blocks[0].type === BlockType.HEADING1) {
+        const updatedBlocks = [...blocks];
+        updatedBlocks[0] = new Block(
+          updatedBlocks[0].id,
+          updatedBlocks[0].type,
+          editingName.trim(),
+          updatedBlocks[0].metadata,
+          updatedBlocks[0].settings
+        );
+        setBlocks(updatedBlocks);
+        
+        // Queue the first block for sync
+        queueBlocksForSync([updatedBlocks[0]]);
       }
     }
     setIsEditingName(false);
@@ -392,6 +361,7 @@ export default function NotebookPage() {
           <NoteEditor
             initialBlocks={blocks}
             onChange={handleBlocksChange}
+            nonDeletableBlockIds={new Set(blocks.length > 0 && blocks[0].type === BlockType.HEADING1 ? [blocks[0].id] : [])}
           />
         </div>
       </main>

@@ -23,6 +23,16 @@ def notebook_list_create(request):
         if serializer.is_valid():
             notebook = serializer.save()
             NotebookUserConnector.objects.create(user=request.user, notebook=notebook)
+            
+            # Create initial heading 1 block with notebook name
+            initial_block = Block.objects.create(
+                type='heading1',
+                content=notebook.name,
+                metadata={},
+                settings={}
+            )
+            BlockNotebookConnector.objects.create(block=initial_block, notebook=notebook)
+            
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { getNotebooks, createNotebook, deleteNotebook, NotebookConnector } from '../../api/auth';
-import { LogOut, Trash2 } from 'lucide-react';
+import { LogOut, Trash2, Check, Loader2 } from 'lucide-react';
+import SyncWorker from '../../utils/SyncWorker';
 
 export default function NotebooksPage() {
   const [notebooks, setNotebooks] = useState<NotebookConnector[]>([]);
@@ -13,6 +14,8 @@ export default function NotebooksPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [notebookToDelete, setNotebookToDelete] = useState<NotebookConnector | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [hasPendingSync, setHasPendingSync] = useState(false);
+  const syncWorker = useRef(SyncWorker.getInstance());
 
   const fetchNotebooks = async () => {
     try {
@@ -25,6 +28,16 @@ export default function NotebooksPage() {
 
   useEffect(() => {
     fetchNotebooks().finally(() => setLoading(false));
+  }, []);
+
+  // Check for pending sync operations periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const hasPending = syncWorker.current.hasAnyPendingOperations();
+      setHasPendingSync(hasPending);
+    }, 500); // Check every 500ms
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleCreateNotebook = async () => {
@@ -101,6 +114,13 @@ export default function NotebooksPage() {
               <span className="text-xl font-bold text-gray-900">EncNotes</span>
             </div>
             <div className="flex items-center space-x-4">
+              <div title={hasPendingSync ? "Syncing..." : "All changes synced"}>
+                {hasPendingSync ? (
+                  <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                ) : (
+                  <Check className="w-5 h-5 text-green-600" />
+                )}
+              </div>
               <button
                 onClick={() => {
                   localStorage.removeItem('authToken');

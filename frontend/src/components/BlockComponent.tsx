@@ -10,8 +10,9 @@ import { GridBlock } from './GridBlock';
 import ImageBlock from './ImageBlock';
 import VideoBlock from './VideoBlock';
 import AudioBlock from './AudioBlock';
+import NotebookLinkBlock from './NotebookLinkBlock';
 import { BlockStyling } from '@/models/Settings';
-import { Image, Video, Volume2, Trash2 } from 'lucide-react';
+import { Image, Video, Volume2, Trash2, BookOpen } from 'lucide-react';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { Settings } from 'lucide-react';
 import katex from 'katex';
@@ -32,6 +33,7 @@ interface BlockComponentProps {
   onDrop?: (targetId: string) => void;
   onCreateBlock: (blockType: BlockType) => string;
   isActive: boolean;
+  isDeletable?: boolean;
 }
 
 const BlockComponent: React.FC<BlockComponentProps> = ({
@@ -49,6 +51,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   onDrop,
   onCreateBlock,
   isActive,
+  isDeletable = true,
 }) => {
   const { settings: globalSettings } = useGlobalSettings();
   const [showMenu, setShowMenu] = useState(false);
@@ -172,7 +175,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       // Ctrl+Shift+Enter creates new block above
       e.preventDefault();
       onAddAbove(block.id);
-    } else if (e.key === 'Backspace' && content === '' && !e.shiftKey) {
+    } else if (e.key === 'Backspace' && content === '' && !e.shiftKey && isDeletable) {
       e.preventDefault();
       onDelete(block.id);
     } else if (e.key === 'ArrowUp' && e.ctrlKey) {
@@ -402,6 +405,8 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
         return <Volume2 className="w-4 h-4" />;
       case BlockType.GRID:
         return <span>📊</span>;
+      case BlockType.NOTEBOOK_LINK:
+        return <BookOpen className="w-4 h-4" />;
       default:
         return <span>¶</span>;
     }
@@ -437,6 +442,8 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
         return 'Audio';
       case BlockType.GRID:
         return 'Grid Layout';
+      case BlockType.NOTEBOOK_LINK:
+        return 'Notebook Link';
       default:
         return 'Paragraph';
     }
@@ -552,6 +559,15 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             block={block}
             onUpdate={onUpdate}
             onFocus={onFocus}
+            cellMarginStyle={cellMarginStyle}
+          />
+        );
+
+      case BlockType.NOTEBOOK_LINK:
+        return (
+          <NotebookLinkBlock
+            block={block}
+            onUpdate={onUpdate}
             cellMarginStyle={cellMarginStyle}
           />
         );
@@ -841,13 +857,15 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             </svg>
           </button>
           {/* Delete block button */}
-          <button
-            onClick={() => onDelete(block.id)}
-            className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-red-600 flex-shrink-0"
-            title="Delete block"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {isDeletable && (
+            <button
+              onClick={() => onDelete(block.id)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-red-600 flex-shrink-0"
+              title="Delete block"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         <div
@@ -924,7 +942,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
         </div>
 
         {/* Formatting Toolbar - below the cell border */}
-        {isActive && showFormatting && ![BlockType.CODE, BlockType.DIVIDER, BlockType.IMAGE, BlockType.VIDEO, BlockType.MATH].includes(block.type) && (
+        {isActive && showFormatting && ![BlockType.CODE, BlockType.DIVIDER, BlockType.IMAGE, BlockType.VIDEO, BlockType.AUDIO, BlockType.MATH, BlockType.GRID, BlockType.NOTEBOOK_LINK].includes(block.type) && (
           <div className="mt-1 mr-8 flex justify-end">
             <TextFormattingToolbar 
               onFormat={toggleFormatMode} 

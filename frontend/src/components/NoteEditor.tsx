@@ -10,9 +10,10 @@ import { Plus } from 'lucide-react';
 interface NoteEditorProps {
   initialBlocks?: Block[];
   onChange?: (blocks: Block[]) => void;
+  nonDeletableBlockIds?: Set<string>;
 }
 
-const NoteEditor: React.FC<NoteEditorProps> = ({ initialBlocks, onChange }) => {
+const NoteEditor: React.FC<NoteEditorProps> = ({ initialBlocks, onChange, nonDeletableBlockIds = new Set() }) => {
   const { settings: globalSettings } = useGlobalSettings();
   const [documentManager] = useState(
     () => new DocumentManager(initialBlocks, onChange)
@@ -27,6 +28,11 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ initialBlocks, onChange }) => {
   };
 
   const handleDeleteBlock = (id: string) => {
+    // Prevent deletion of non-deletable blocks
+    if (nonDeletableBlockIds.has(id)) {
+      return;
+    }
+    
     const currentBlocks = documentManager.getBlocks();
     const currentIndex = currentBlocks.findIndex((b) => b.id === id);
     
@@ -192,6 +198,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ initialBlocks, onChange }) => {
             onDrop={handleDrop}
             onCreateBlock={handleCreateBlock}
             isActive={activeBlockId === block.id}
+            isDeletable={!nonDeletableBlockIds.has(block.id)}
           />
         ))}
       </div>
