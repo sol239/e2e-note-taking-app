@@ -1,3 +1,5 @@
+import FrontendHub from '../utils/FrontendHub';
+
 const API_BASE_URL = 'http://localhost:8000/api';
 
 export interface LoginRequest {
@@ -44,7 +46,10 @@ export interface BlockConnector {
 }
 
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE_URL}/login/`, {
+  const url = `${API_BASE_URL}/login/`;
+  FrontendHub.logRequest(url, 'POST', credentials);
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -54,14 +59,20 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
 
   if (!response.ok) {
     const errorData: ErrorResponse = await response.json();
+    FrontendHub.logError(url, errorData);
     throw new Error(errorData.error || 'Login failed');
   }
 
-  return response.json();
+  const data = await response.json();
+  FrontendHub.logResponse(url, response.status, data);
+  return data;
 }
 
 export async function register(userData: RegisterRequest): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE_URL}/register/`, {
+  const url = `${API_BASE_URL}/register/`;
+  FrontendHub.logRequest(url, 'POST', userData);
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -71,10 +82,13 @@ export async function register(userData: RegisterRequest): Promise<AuthResponse>
 
   if (!response.ok) {
     const errorData: ErrorResponse = await response.json();
+    FrontendHub.logError(url, errorData);
     throw new Error(errorData.error || 'Registration failed');
   }
 
-  return response.json();
+  const data = await response.json();
+  FrontendHub.logResponse(url, response.status, data);
+  return data;
 }
 
 export async function getNotebooks(): Promise<NotebookConnector[]> {
@@ -83,7 +97,10 @@ export async function getNotebooks(): Promise<NotebookConnector[]> {
     throw new Error('No auth token found');
   }
 
-  const response = await fetch(`${API_BASE_URL}/notebooks/`, {
+  const url = `${API_BASE_URL}/notebooks/`;
+  FrontendHub.logRequest(url, 'GET');
+
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       'Authorization': `Token ${token}`,
@@ -92,10 +109,13 @@ export async function getNotebooks(): Promise<NotebookConnector[]> {
   });
 
   if (!response.ok) {
+    FrontendHub.logError(url, `Status: ${response.status}`);
     throw new Error('Failed to fetch notebooks');
   }
 
-  return response.json();
+  const data = await response.json();
+  FrontendHub.logResponse(url, response.status, data);
+  return data;
 }
 
 export async function createNotebook(name: string): Promise<Notebook> {
@@ -104,20 +124,27 @@ export async function createNotebook(name: string): Promise<Notebook> {
     throw new Error('No auth token found');
   }
 
-  const response = await fetch(`${API_BASE_URL}/notebooks/`, {
+  const url = `${API_BASE_URL}/notebooks/`;
+  const body = { name };
+  FrontendHub.logRequest(url, 'POST', body);
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Token ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
+    FrontendHub.logError(url, `Status: ${response.status}`);
     throw new Error('Failed to create notebook');
   }
 
-  return response.json();
+  const data = await response.json();
+  FrontendHub.logResponse(url, response.status, data);
+  return data;
 }
 
 export async function updateNotebook(notebookId: string, name: string): Promise<Notebook> {
@@ -126,20 +153,27 @@ export async function updateNotebook(notebookId: string, name: string): Promise<
     throw new Error('No auth token found');
   }
 
-  const response = await fetch(`${API_BASE_URL}/notebooks/${notebookId}/`, {
+  const url = `${API_BASE_URL}/notebooks/${notebookId}/`;
+  const body = { name };
+  FrontendHub.logRequest(url, 'PUT', body);
+
+  const response = await fetch(url, {
     method: 'PUT',
     headers: {
       'Authorization': `Token ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
+    FrontendHub.logError(url, `Status: ${response.status}`);
     throw new Error('Failed to update notebook');
   }
 
-  return response.json();
+  const data = await response.json();
+  FrontendHub.logResponse(url, response.status, data);
+  return data;
 }
 
 export async function getNotebookBlocks(notebookId: string): Promise<BlockConnector[]> {
@@ -148,7 +182,10 @@ export async function getNotebookBlocks(notebookId: string): Promise<BlockConnec
     throw new Error('No auth token found');
   }
 
-  const response = await fetch(`${API_BASE_URL}/notebooks/${notebookId}/blocks/`, {
+  const url = `${API_BASE_URL}/notebooks/${notebookId}/blocks/`;
+  FrontendHub.logRequest(url, 'GET');
+
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       'Authorization': `Token ${token}`,
@@ -157,10 +194,13 @@ export async function getNotebookBlocks(notebookId: string): Promise<BlockConnec
   });
 
   if (!response.ok) {
+    FrontendHub.logError(url, `Status: ${response.status}`);
     throw new Error('Failed to fetch notebook blocks');
   }
 
-  return response.json();
+  const data = await response.json();
+  FrontendHub.logResponse(url, response.status, data);
+  return data;
 }
 
 export async function createBlock(notebookId: string, blockData: Partial<Block>): Promise<Block> {
@@ -169,7 +209,10 @@ export async function createBlock(notebookId: string, blockData: Partial<Block>)
     throw new Error('No auth token found');
   }
 
-  const response = await fetch(`${API_BASE_URL}/notebooks/${notebookId}/blocks/`, {
+  const url = `${API_BASE_URL}/notebooks/${notebookId}/blocks/`;
+  FrontendHub.logRequest(url, 'POST', blockData);
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Token ${token}`,
@@ -179,10 +222,63 @@ export async function createBlock(notebookId: string, blockData: Partial<Block>)
   });
 
   if (!response.ok) {
-    throw new Error('Failed to create block');
+    FrontendHub.logError(url, `Status: ${response.status}`);
+    throw new Error('Failed to update block');
   }
 
-  return response.json();
+  const data = await response.json();
+  FrontendHub.logResponse(url, response.status, data);
+  return data;
+}
+
+export async function deleteBlock(notebookId: string, blockId: string): Promise<void> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    throw new Error('No auth token found');
+  }
+
+  const url = `${API_BASE_URL}/notebooks/${notebookId}/blocks/${blockId}/`;
+  FrontendHub.logRequest(url, 'DELETE');
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Token ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    FrontendHub.logError(url, `Status: ${response.status}`);
+    throw new Error('Failed to delete block');
+  }
+
+  FrontendHub.logResponse(url, response.status);
+}
+
+export async function deleteNotebook(notebookId: string): Promise<void> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    throw new Error('No auth token found');
+  }
+
+  const url = `${API_BASE_URL}/notebooks/${notebookId}/`;
+  FrontendHub.logRequest(url, 'DELETE');
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Token ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    FrontendHub.logError(url, `Status: ${response.status}`);
+    throw new Error('Failed to delete notebook');
+  }
+
+  FrontendHub.logResponse(url, response.status);
 }
 
 export async function updateBlock(notebookId: string, blockId: string, blockData: Partial<Block>): Promise<Block> {
@@ -191,7 +287,10 @@ export async function updateBlock(notebookId: string, blockId: string, blockData
     throw new Error('No auth token found');
   }
 
-  const response = await fetch(`${API_BASE_URL}/notebooks/${notebookId}/blocks/${blockId}/`, {
+  const url = `${API_BASE_URL}/notebooks/${notebookId}/blocks/${blockId}/`;
+  FrontendHub.logRequest(url, 'PUT', blockData);
+
+  const response = await fetch(url, {
     method: 'PUT',
     headers: {
       'Authorization': `Token ${token}`,
@@ -201,8 +300,11 @@ export async function updateBlock(notebookId: string, blockId: string, blockData
   });
 
   if (!response.ok) {
+    FrontendHub.logError(url, `Status: ${response.status}`);
     throw new Error('Failed to update block');
   }
 
-  return response.json();
+  const data = await response.json();
+  FrontendHub.logResponse(url, response.status, data);
+  return data;
 }

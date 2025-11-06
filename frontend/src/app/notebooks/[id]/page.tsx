@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getNotebookBlocks, getNotebooks, updateNotebook, updateBlock, createBlock } from '../../../api/auth';
+import { getNotebookBlocks, getNotebooks, updateNotebook, updateBlock, createBlock, deleteBlock } from '../../../api/auth';
 import NoteEditor from '../../../components/NoteEditor';
 import { Block, BlockType } from '../../../models/Block';
 import { Check, X, Loader2 } from 'lucide-react';
@@ -22,6 +22,7 @@ export default function NotebookPage() {
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
   const [blockSyncStates, setBlockSyncStates] = useState<Map<string, 'pending' | 'syncing' | 'synced' | 'error'>>(new Map());
   const [existingBlockIds, setExistingBlockIds] = useState<Set<string>>(new Set());
+  const [previousBlocks, setPreviousBlocks] = useState<Map<string, Block>>(new Map());
   const syncTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const syncQueueRef = useRef<Set<string>>(new Set());
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +55,13 @@ export default function NotebookPage() {
         
         // Track which blocks exist in the database
         setExistingBlockIds(new Set(convertedBlocks.map(b => b.id)));
+        
+        // Initialize previous blocks state for change detection
+        const blocksMap = new Map<string, Block>();
+        convertedBlocks.forEach(block => {
+          blocksMap.set(block.id, block.clone());
+        });
+        setPreviousBlocks(blocksMap);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load notebook');
       } finally {
@@ -75,14 +83,75 @@ export default function NotebookPage() {
   }, []);
 
   const handleBlocksChange = (newBlocks: Block[]) => {
+    // Detect deleted blocks
+    const newBlockIds = new Set(newBlocks.map(b => b.id));
+    const deletedBlockIds = Array.from(previousBlocks.keys()).filter(id => !newBlockIds.has(id));
+    
+    // Handle deletions
+    if (deletedBlockIds.length > 0) {
+      deletedBlockIds.forEach(async (blockId) => {
+        if (existingBlockIds.has(blockId)) {
+          try {
+            await deleteBlock(notebookId, blockId);
+            console.log('Deleted block from backend:', blockId);
+            setExistingBlockIds(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(blockId);
+              return newSet;
+            });
+          } catch (error) {
+            console.error('Failed to delete block:', blockId, error);
+          }
+        }
+        // Remove from previous blocks tracking
+        setPreviousBlocks(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(blockId);
+          return newMap;
+        });
+      });
+    }
+    
     setBlocks(newBlocks);
-    queueBlocksForSync(newBlocks);
+    
+    // Detect which blocks have changed
+    const changedBlocks = newBlocks.filter(block => {
+      const prevBlock = previousBlocks.get(block.id);
+      if (!prevBlock) {
+        // New block
+        return true;
+      }
+      // Check if block content, type, metadata, or settings changed
+      return (
+        prevBlock.content !== block.content ||
+        prevBlock.type !== block.type ||
+        JSON.stringify(prevBlock.metadata) !== JSON.stringify(block.metadata) ||
+        JSON.stringify(prevBlock.settings) !== JSON.stringify(block.settings)
+      );
+    });
+    
+    if (changedBlocks.length > 0) {
+      queueBlocksForSync(changedBlocks);
+      
+      // Update previous blocks state for changed blocks
+      setPreviousBlocks(prev => {
+        const newMap = new Map(prev);
+        changedBlocks.forEach(block => {
+          newMap.set(block.id, block.clone());
+        });
+        return newMap;
+      });
+    }
   };
 
   const queueBlocksForSync = (blocksToSync: Block[]) => {
-    // Clear existing timeouts for all blocks
-    syncTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
-    syncTimeoutsRef.current.clear();
+    // Clear existing timeouts only for blocks being synced
+    blocksToSync.forEach(block => {
+      const existingTimeout = syncTimeoutsRef.current.get(block.id);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+    });
 
     // Reset sync states for changed blocks
     setBlockSyncStates(prev => {
@@ -98,7 +167,7 @@ export default function NotebookPage() {
       syncQueueRef.current.add(block.id);
     });
 
-    // Set new timeouts for each block
+    // Set new timeouts for each changed block
     blocksToSync.forEach(block => {
       const timeout = setTimeout(() => {
         processSyncQueue();
