@@ -1,13 +1,17 @@
 'use client';
 
-import React, { useState, useRef, useEffect, KeyboardEvent, DragEvent } from 'react';
-import { Block, BlockType } from '@/models/Block';
+import React, { useState, useRef, useEffect, KeyboardEvent, DragEvent, useCallback } from 'react';
+import { Block, BlockType, IBlock } from '@/models/Block';
 import TextFormattingToolbar from './TextFormattingToolbar';
 import { BlockSettingsPanel } from './BlockSettingsPanel';
 import { CodeBlockRenderer } from './CodeBlockRenderer';
 import { LiveCodeEditor } from './LiveCodeEditor';
 import { GridBlock } from './GridBlock';
+import ImageBlock from './ImageBlock';
+import VideoBlock from './VideoBlock';
+import AudioBlock from './AudioBlock';
 import { BlockStyling } from '@/models/Settings';
+import { Image, Video, Volume2, Trash2 } from 'lucide-react';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { Settings } from 'lucide-react';
 import katex from 'katex';
@@ -57,6 +61,9 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isMathEditing, setIsMathEditing] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0 });
+  const [initialSize, setInitialSize] = useState({ width: 0, height: 0 });
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
   const firstMenuItemRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -66,10 +73,6 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       inputRef.current.focus();
     }
   }, [isActive]);
-
-  useEffect(() => {
-    setContent(block.content);
-  }, [block.content]);
 
   // Focus on first menu item when menu opens
   useEffect(() => {
@@ -228,48 +231,55 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
     }
   };
 
-  const applyFormatting = (format: string) => {
-    const textarea = inputRef.current as HTMLTextAreaElement;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = content.substring(start, end);
-    let formattedText = '';
-
-    switch (format) {
-      case 'bold':
-        formattedText = `**${selectedText || 'bold text'}**`;
-        break;
-      case 'italic':
-        formattedText = `*${selectedText || 'italic text'}*`;
-        break;
-      case 'underline':
-        formattedText = `<u>${selectedText || 'underlined text'}</u>`;
-        break;
-      case 'strikethrough':
-        formattedText = `~~${selectedText || 'strikethrough'}~~`;
-        break;
-      case 'code':
-        formattedText = `\`${selectedText || 'code'}\``;
-        break;
-      case 'link':
-        formattedText = `[${selectedText || 'link text'}](url)`;
-        break;
-      default:
-        return;
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    setResizeStart({ x: e.clientX, y: e.clientY });
+    
+    const element = e.currentTarget.parentElement?.querySelector('img, iframe');
+    if (element) {
+      const rect = element.getBoundingClientRect();
+      setInitialSize({ width: rect.width, height: rect.height });
     }
-
-    const newContent =
-      content.substring(0, start) + formattedText + content.substring(end);
-    setContent(newContent);
-    onUpdate(block.id, { content: newContent });
   };
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return;
+    
+    const deltaX = e.clientX - resizeStart.x;
+    const deltaY = e.clientY - resizeStart.y;
+    
+    const newWidth = Math.max(100, initialSize.width + deltaX);
+    const newHeight = Math.max(100, initialSize.height + deltaY);
+    
+    onUpdate(block.id, {
+      metadata: {
+        ...block.metadata,
+        width: newWidth,
+        height: newHeight
+      } as IBlock['metadata']
+    });
+  }, [isResizing, resizeStart, initialSize, block.id, block.metadata, onUpdate]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleResizeMove);
+      document.addEventListener('mouseup', handleResizeEnd);
+      return () => {
+        document.removeEventListener('mousemove', handleResizeMove);
+        document.removeEventListener('mouseup', handleResizeEnd);
+      };
+    }
+  }, [isResizing, handleResizeMove, handleResizeEnd]);
 
   const handleChange = (value: string) => {
     // Apply active formats to new text
     let newText = value;
-    const lastChar = value.slice(-1);
     const prevContent = content;
     
     // Only apply formatting to newly typed characters
@@ -362,22 +372,6 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
     }
   };
 
-  const renderMarkdown = (text: string) => {
-    let html = text;
-    // Bold
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // Italic
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    // Strikethrough
-    html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
-    // Inline code
-    html = html.replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 rounded text-sm">$1</code>');
-    // Links
-    html = html.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-blue-600 underline">$1</a>');
-    
-    return html;
-  };
-
   const getBlockIcon = () => {
     switch (block.type) {
       case BlockType.HEADING1:
@@ -395,15 +389,17 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       case BlockType.CODE:
         return <span>{'</>'}</span>;
       case BlockType.QUOTE:
-        return <span>"</span>;
+        return <span>&quot;</span>;
       case BlockType.MATH:
         return <span>∑</span>;
       case BlockType.DIVIDER:
         return <span>—</span>;
       case BlockType.IMAGE:
-        return <span>🖼️</span>;
+        return <Image className="w-4 h-4" />;
       case BlockType.VIDEO:
-        return <span>🎥</span>;
+        return <Video className="w-4 h-4" />;
+      case BlockType.AUDIO:
+        return <Volume2 className="w-4 h-4" />;
       case BlockType.GRID:
         return <span>📊</span>;
       default:
@@ -437,6 +433,8 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
         return 'Image';
       case BlockType.VIDEO:
         return 'Video';
+      case BlockType.AUDIO:
+        return 'Audio';
       case BlockType.GRID:
         return 'Grid Layout';
       default:
@@ -460,27 +458,12 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       
       case BlockType.IMAGE:
         return (
-          <div className="space-y-2" style={cellMarginStyle}>
-            <input
-              ref={inputRef as React.RefObject<HTMLInputElement>}
-              type="text"
-              value={block.metadata?.url || ''}
-              onChange={(e) => onUpdate(block.id, { 
-                metadata: { ...block.metadata, url: e.target.value } 
-              })}
-              onKeyDown={handleKeyDown}
-              onFocus={() => onFocus(block.id)}
-              placeholder="Image URL"
-              className={`${baseClasses} text-sm`}
-            />
-            {block.metadata?.url && (
-              <img 
-                src={block.metadata.url} 
-                alt={block.metadata?.alt || 'Image'} 
-                className="max-w-full rounded-lg"
-              />
-            )}
-          </div>
+          <ImageBlock
+            block={block}
+            onUpdate={onUpdate}
+            cellMarginStyle={cellMarginStyle}
+            onResizeStart={handleResizeStart}
+          />
         );
       
       case BlockType.GRID:
@@ -509,6 +492,17 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
               }}
               onCellDrop={(cellKey: string, blockId: string) => {
                 const updatedGridCells = { ...block.metadata?.gridCells };
+                
+                // Remove the block from any existing cell in this grid
+                Object.keys(updatedGridCells).forEach(existingCellKey => {
+                  updatedGridCells[existingCellKey] = updatedGridCells[existingCellKey].filter(id => id !== blockId);
+                  // Remove empty cells
+                  if (updatedGridCells[existingCellKey].length === 0) {
+                    delete updatedGridCells[existingCellKey];
+                  }
+                });
+                
+                // Add the block to the new cell
                 updatedGridCells[cellKey] = [blockId];
                 onUpdate(block.id, {
                   metadata: { ...block.metadata, gridCells: updatedGridCells }
@@ -543,29 +537,23 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
 
       case BlockType.VIDEO:
         return (
-          <div className="space-y-2" style={cellMarginStyle}>
-            <input
-              ref={inputRef as React.RefObject<HTMLInputElement>}
-              type="text"
-              value={block.metadata?.url || ''}
-              onChange={(e) => onUpdate(block.id, { 
-                metadata: { ...block.metadata, url: e.target.value } 
-              })}
-              onKeyDown={handleKeyDown}
-              onFocus={() => onFocus(block.id)}
-              placeholder="Video URL (YouTube, Vimeo, etc.)"
-              className={`${baseClasses} text-sm`}
-            />
-            {block.metadata?.url && (
-              <div className="aspect-video">
-                <iframe
-                  src={block.metadata.url}
-                  className="w-full h-full rounded-lg"
-                  allowFullScreen
-                />
-              </div>
-            )}
-          </div>
+          <VideoBlock
+            block={block}
+            onUpdate={onUpdate}
+            onFocus={onFocus}
+            cellMarginStyle={cellMarginStyle}
+            onResizeStart={handleResizeStart}
+          />
+        );
+
+      case BlockType.AUDIO:
+        return (
+          <AudioBlock
+            block={block}
+            onUpdate={onUpdate}
+            onFocus={onFocus}
+            cellMarginStyle={cellMarginStyle}
+          />
         );
 
       case BlockType.HEADING1:
@@ -785,7 +773,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
           </div>
         );
       default:
-        return (
+        return isActive ? (
           <textarea
             ref={inputRef as React.RefObject<HTMLTextAreaElement>}
             value={content}
@@ -801,6 +789,14 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             style={cellMarginStyle}
             rows={Math.max(1, content.split('\n').length)}
           />
+        ) : (
+          <div
+            className={`${baseClasses} text-base cursor-text whitespace-pre-wrap`}
+            style={cellMarginStyle}
+            onClick={() => onFocus(block.id)}
+          >
+            {content || <span className="text-gray-400 italic">Type &apos;/&apos; for commands</span>}
+          </div>
         );
     }
   };
@@ -813,36 +809,46 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       onDrop={handleDrop}
     >
       <div className="flex items-start gap-1">
-        {/* Drag handle button on the left */}
-        <button
-          draggable
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onClick={(e) => {
-            if (e.ctrlKey || e.metaKey) {
-              e.preventDefault();
-              e.stopPropagation();
-              if (e.shiftKey) {
-                // Ctrl+Shift+Click creates cell above
-                onAddAbove(block.id);
-              } else {
-                // Ctrl+Click creates cell below
-                onAddBelow(block.id);
+        <div className="flex flex-col items-center">
+          {/* Drag handle button on the left */}
+          <button
+            draggable
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onClick={(e) => {
+              if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.shiftKey) {
+                  // Ctrl+Shift+Click creates cell above
+                  onAddAbove(block.id);
+                } else {
+                  // Ctrl+Click creates cell below
+                  onAddBelow(block.id);
+                }
               }
-            }
-          }}
-          className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 flex-shrink-0 cursor-grab active:cursor-grabbing"
-          title="Drag to reorder | Ctrl+Click: add below | Ctrl+Shift+Click: add above"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <circle cx="6" cy="5" r="1.5" />
-            <circle cx="14" cy="5" r="1.5" />
-            <circle cx="6" cy="10" r="1.5" />
-            <circle cx="14" cy="10" r="1.5" />
-            <circle cx="6" cy="15" r="1.5" />
-            <circle cx="14" cy="15" r="1.5" />
-          </svg>
-        </button>
+            }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 flex-shrink-0 cursor-grab active:cursor-grabbing"
+            title="Drag to reorder | Ctrl+Click: add below | Ctrl+Shift+Click: add above"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <circle cx="6" cy="5" r="1.5" />
+              <circle cx="14" cy="5" r="1.5" />
+              <circle cx="6" cy="10" r="1.5" />
+              <circle cx="14" cy="10" r="1.5" />
+              <circle cx="6" cy="15" r="1.5" />
+              <circle cx="14" cy="15" r="1.5" />
+            </svg>
+          </button>
+          {/* Delete block button */}
+          <button
+            onClick={() => onDelete(block.id)}
+            className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-red-600 flex-shrink-0"
+            title="Delete block"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
 
         <div
           className={`pt-0 pb-1 px-2 rounded transition-colors flex-1 ${

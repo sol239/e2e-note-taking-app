@@ -13,6 +13,7 @@ export enum BlockType {
   DIVIDER = 'divider',
   IMAGE = 'image',
   VIDEO = 'video',
+  AUDIO = 'audio',
   GRID = 'grid',
 }
 
@@ -25,6 +26,10 @@ export interface IBlock {
     checked?: boolean; // For todo items
     url?: string; // For images and videos
     alt?: string; // For images
+    filename?: string; // For uploaded images
+    uploaded?: boolean; // For uploaded images
+    width?: number; // For resizable images and videos
+    height?: number; // For resizable images and videos
     gridRows?: number; // For grid blocks
     gridCols?: number; // For grid blocks
     gridCells?: Record<string, string[]>; // For grid blocks - cell key to block IDs
@@ -52,6 +57,8 @@ export class Block implements IBlock {
     checked?: boolean;
     url?: string;
     alt?: string;
+    filename?: string;
+    uploaded?: boolean;
     gridRows?: number;
     gridCols?: number;
     gridCells?: Record<string, string[]>;
@@ -78,6 +85,8 @@ export class Block implements IBlock {
       checked?: boolean;
       url?: string;
       alt?: string;
+      filename?: string;
+      uploaded?: boolean;
       gridRows?: number;
       gridCols?: number;
       gridCells?: Record<string, string[]>;

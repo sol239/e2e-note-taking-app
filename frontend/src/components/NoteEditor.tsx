@@ -5,6 +5,7 @@ import { Block, BlockType } from '@/models/Block';
 import { DocumentManager } from '@/models/DocumentManager';
 import BlockComponent from './BlockComponent';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
+import { Plus } from 'lucide-react';
 
 interface NoteEditorProps {
   initialBlocks?: Block[];
@@ -102,6 +103,43 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ initialBlocks, onChange }) => {
     const draggedIndex = currentBlocks.findIndex((b) => b.id === draggedBlockId);
     const targetIndex = currentBlocks.findIndex((b) => b.id === targetId);
 
+    // Check if the dragged block is currently in a grid
+    let draggedFromGrid = false;
+    let gridBlockId: string | null = null;
+
+    for (const block of currentBlocks) {
+      if (block.type === BlockType.GRID && block.metadata?.gridCells) {
+        const gridCells = block.metadata.gridCells as Record<string, string[]>;
+        for (const cellKey in gridCells) {
+          if (gridCells[cellKey] && gridCells[cellKey].includes(draggedBlockId)) {
+            draggedFromGrid = true;
+            gridBlockId = block.id;
+            break;
+          }
+        }
+        if (draggedFromGrid) break;
+      }
+    }
+
+    // If dragged from grid, remove it from the grid
+    if (draggedFromGrid && gridBlockId) {
+      const gridBlock = currentBlocks.find(b => b.id === gridBlockId);
+      if (gridBlock && gridBlock.metadata?.gridCells) {
+        const updatedGridCells = { ...gridBlock.metadata.gridCells };
+        // Remove the block from all grid cells
+        Object.keys(updatedGridCells).forEach(cellKey => {
+          updatedGridCells[cellKey] = updatedGridCells[cellKey].filter(id => id !== draggedBlockId);
+          // Remove empty cells
+          if (updatedGridCells[cellKey].length === 0) {
+            delete updatedGridCells[cellKey];
+          }
+        });
+        documentManager.updateBlock(gridBlockId, {
+          metadata: { ...gridBlock.metadata, gridCells: updatedGridCells }
+        });
+      }
+    }
+
     if (draggedIndex !== -1 && targetIndex !== -1) {
       // Move the dragged block to the target position
       documentManager.moveBlock(draggedBlockId, targetIndex);
@@ -119,6 +157,16 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ initialBlocks, onChange }) => {
     documentManager.addBlock(newBlock);
     setBlocks(documentManager.getBlocks());
     return newBlock.id;
+  };
+
+  const handleAddNewBlock = () => {
+    const newBlock = new Block(
+      documentManager.generateId(),
+      BlockType.PARAGRAPH
+    );
+    documentManager.addBlock(newBlock);
+    setBlocks(documentManager.getBlocks());
+    setActiveBlockId(newBlock.id);
   };
 
   return (
@@ -146,6 +194,16 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ initialBlocks, onChange }) => {
             isActive={activeBlockId === block.id}
           />
         ))}
+      </div>
+
+      <div className="mt-4">
+        <button
+          onClick={handleAddNewBlock}
+          className="flex items-center gap-2 text-gray-500 hover:text-gray-700"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Create new cell</span>
+        </button>
       </div>
       
       <div className="mt-8 text-sm text-gray-400 space-y-1">
