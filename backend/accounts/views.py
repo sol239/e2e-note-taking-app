@@ -1,11 +1,13 @@
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework import permissions
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
 from accounts.models import User
 
 @api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def register(request):
     """
     Register a new user account.
@@ -23,6 +25,7 @@ def register(request):
     return Response({'token': token.key}, status=status.HTTP_201_CREATED)
 
 @api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def login_view(request):
     """
     Authenticate user and return token.
