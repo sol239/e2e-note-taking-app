@@ -3,20 +3,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getNotebooks, createNotebook, deleteNotebook, NotebookConnector, getUser, User } from '../../api/auth';
-import { Trash2, FileText, Clock, ChevronRight } from 'lucide-react';
+import { getNotebooks, createNotebook, deleteNotebook, NotebookConnector, getUser, User, importNotebook } from '../../api/auth';
+import { Trash2, FileText, Clock, ChevronRight, Upload } from 'lucide-react';
 import SyncWorker from '../../utils/SyncWorker';
+import { useMainView } from '../../contexts/MainViewContext';
 
 export default function NotebooksPage() {
-  const [notebooks, setNotebooks] = useState<NotebookConnector[]>([]);
+  const { notebooks, fetchNotebooks: contextFetchNotebooks } = useMainView();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [notebookToDelete, setNotebookToDelete] = useState<NotebookConnector | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [greeting, setGreeting] = useState('Good morning');
   const [user, setUser] = useState<User | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -24,20 +27,16 @@ export default function NotebooksPage() {
     else if (hour < 18) setGreeting('Good afternoon');
     else setGreeting('Good evening');
 
-    fetchNotebooks();
+    // redirect to login if not authenticated
+    if (typeof window !== 'undefined' && !localStorage.getItem('authToken')) {
+      router.push('/login');
+      return;
+    }
+
     fetchUser();
   }, []);
 
   const router = useRouter();
-
-  const fetchNotebooks = async () => {
-    try {
-      const data = await getNotebooks();
-      setNotebooks(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load notebooks');
-    }
-  };
 
   const fetchUser = async () => {
     try {
@@ -57,11 +56,35 @@ export default function NotebooksPage() {
       // After creation navigate to the notebook page
       router.push(`/notebooks/${created.id}`);
       // Refresh the list in the background
-      await fetchNotebooks();
+      await contextFetchNotebooks();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create notebook');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      await importNotebook(file);
+      await contextFetchNotebooks();
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import notebook');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -81,7 +104,7 @@ export default function NotebooksPage() {
     setDeleting(true);
     try {
       await deleteNotebook(notebookToDelete.notebook.id);
-      await fetchNotebooks(); // Refresh the list
+      await contextFetchNotebooks(); // Refresh the list
       closeDeleteModal();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete notebook');
@@ -155,10 +178,63 @@ export default function NotebooksPage() {
             </div>
             <span className="text-sm font-medium">{creating ? 'Creating...' : 'New Notebook'}</span>
           </button>
+
+          {/* Import Card */}
+          <button
+            onClick={handleImportClick}
+            disabled={importing}
+            className="bg-gray-50 hover:bg-gray-100 rounded-xl p-4 transition-all duration-200 border border-transparent hover:border-gray-200 flex flex-col h-32 justify-center items-center text-gray-500 hover:text-gray-900"
+          >
+            <div className="w-8 h-8 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center mb-2">
+              <Upload className="w-4 h-4" />
+            </div>
+            <span className="text-sm font-medium">{importing ? 'Importing...' : 'Import Notebook'}</span>
+          </button>
         </div>
       </div>
-/* Delete Confirmation Modal */
-      {deleteModalOpen && (
+
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".json,.zip"
+        className="hidden"
+      />
+
+      {/* Import Section */}
+      <div className="mb-8">
+        <div className="flex items-center gap-2 text-gray-500 text-sm font-medium mb-4">
+          <Upload className="w-4 h-4" />
+          <span>Import Notebook</span>
+        </div>
+
+        <div className="flex gap-4">
+          <button
+            onClick={handleImportClick}
+            disabled={importing}
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center justify-center gap-2"
+          >
+            {importing ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            ) : (
+              <Upload className="w-5 h-5" />
+            )}
+            <span className="text-sm font-medium">{importing ? 'Importing...' : 'Upload Notebook'}</span>
+          </button>
+
+          <input
+            type="file"
+            accept=".nb,application/json"
+            onChange={handleFileChange}
+            ref={fileInputRef}
+            className="hidden"
+          />
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */
+      deleteModalOpen && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div className="flex items-center space-x-3 mb-4">

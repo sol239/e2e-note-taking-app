@@ -39,6 +39,12 @@ export interface Block {
   settings: Record<string, unknown>;
 }
 
+export interface BlockConnector {
+  block: Block;
+  position_id: number;
+  position_order: number;
+}
+
 export interface User {
   email: string;
   first_name: string;
@@ -329,7 +335,87 @@ export async function updateBlock(notebookId: string, blockId: string, blockData
 
   if (!response.ok) {
     FrontendHub.logError(url, `Status: ${response.status}`);
+    if (response.status === 404) {
+      throw new Error('404 Not Found');
+    }
     throw new Error('Failed to update block');
+  }
+
+  const data = await response.json();
+  FrontendHub.logResponse(url, response.status, data);
+  return data;
+}
+
+export async function exportNotebook(notebookId: string, format: string): Promise<void> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    throw new Error('No auth token found');
+  }
+
+  const url = `${API_BASE_URL}/notebooks/${notebookId}/export/?export_format=${format}`;
+  FrontendHub.logRequest(url, 'GET');
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Token ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    FrontendHub.logError(url, `Status: ${response.status}`);
+    throw new Error('Failed to export notebook');
+  }
+
+  // Handle file download
+  const blob = await response.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = downloadUrl;
+  
+  // Try to get filename from header
+  const contentDisposition = response.headers.get('Content-Disposition');
+  let filename = `notebook-${notebookId}.${format === 'zip' ? 'zip' : 'json'}`;
+  if (contentDisposition) {
+    const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+    if (filenameMatch && filenameMatch.length === 2) {
+      filename = filenameMatch[1];
+    }
+  }
+  
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(downloadUrl);
+  document.body.removeChild(a);
+  
+  FrontendHub.logResponse(url, response.status, 'File downloaded');
+}
+
+export async function importNotebook(file: File): Promise<Notebook> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    throw new Error('No auth token found');
+  }
+
+  const url = `${API_BASE_URL}/notebooks/import/`;
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  FrontendHub.logRequest(url, 'POST', 'File upload');
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    FrontendHub.logError(url, `Status: ${response.status}`);
+    throw new Error(errorData.error || 'Failed to import notebook');
   }
 
   const data = await response.json();

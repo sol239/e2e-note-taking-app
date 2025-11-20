@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import SettingsContent from './SettingsContent';
@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { view, setView } = useMainView();
   
   // Pages where we don't show sidebar
@@ -23,6 +24,15 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     // Reset the overridden view on navigation
     setView(null);
   }, [pathname, setView]);
+
+  useEffect(() => {
+    // if user is trying to access notebooks without a token, redirect to login
+    // protects both /notebooks and /notebooks/[id]
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    if (!token && pathname && pathname.startsWith('/notebooks')) {
+      router.push('/login');
+    }
+  }, [pathname, router]);
 
   return (
     <div className="flex h-screen overflow-hidden">

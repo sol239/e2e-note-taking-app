@@ -23,28 +23,17 @@ import NotebookMenu from './NotebookMenu';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [notebooks, setNotebooks] = useState<NotebookConnector[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isPrivateExpanded, setIsPrivateExpanded] = useState(true);
   const [creating, setCreating] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
-  const { view, setView } = useMainView();
+  const { view, setView, notebooks, fetchNotebooks } = useMainView();
 
   useEffect(() => {
-    fetchNotebooks();
     fetchUser();
   }, []);
-
-  const fetchNotebooks = async () => {
-    try {
-      const data = await getNotebooks();
-      setNotebooks(data);
-    } catch (err) {
-      console.error('Failed to load notebooks', err);
-    }
-  };
 
   const fetchUser = async () => {
     try {

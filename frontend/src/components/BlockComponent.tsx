@@ -30,7 +30,7 @@ interface BlockComponentProps {
   onMoveDown: (id: string) => void;
   onDragStart?: (id: string) => void;
   onDragOver?: (id: string) => void;
-  onDrop?: (targetId: string) => void;
+  onDrop?: (targetId: string, position?: 'left' | 'right' | 'top' | 'bottom') => void;
   onCreateBlock: (blockType: BlockType) => string;
   isActive: boolean;
   isDeletable?: boolean;
@@ -67,15 +67,68 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0 });
   const [initialSize, setInitialSize] = useState({ width: 0, height: 0 });
+  const [toolbarPosition, setToolbarPosition] = useState<{ top: number; left: number } | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
   const firstMenuItemRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const [dropPosition, setDropPosition] = useState<'left' | 'right' | 'top' | 'bottom' | null>(null);
+
+  useEffect(() => {
+    // Keep local content state in sync if parent updates block.content
+    if (block.content !== content) {
+      setContent(block.content);
+    }
+  }, [block.content]);
+
+  
   useEffect(() => {
     if (isActive && inputRef.current) {
       inputRef.current.focus();
     }
   }, [isActive]);
+
+  // Ensure height adjusts when the block becomes active
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!isActive || !el || !(el instanceof HTMLTextAreaElement)) return;
+    // Adjust after paint
+    const id = requestAnimationFrame(() => {
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [isActive]);
+
+  // Robust auto-resize for textarea (runs after layout and listens for input/resize)
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || !(el instanceof HTMLTextAreaElement)) return;
+
+    const adjustHeight = () => {
+      // Reset height to auto so scrollHeight becomes accurate, then set to scrollHeight
+      // Ensure box-sizing is border-box so height calculation includes padding
+      el.style.boxSizing = 'border-box';
+      el.style.height = 'auto';
+      const newHeight = el.scrollHeight;
+      // Only set if positive and changed
+      if (newHeight && el.style.height !== `${newHeight}px`) {
+        el.style.height = `${newHeight}px`;
+      }
+    };
+
+    // Use requestAnimationFrame to ensure measurement happens after paint/layout
+    const rafId = requestAnimationFrame(adjustHeight);
+    // Add event listeners to handle typing and window resize
+    el.addEventListener('input', adjustHeight);
+    window.addEventListener('resize', adjustHeight);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      el.removeEventListener('input', adjustHeight);
+      window.removeEventListener('resize', adjustHeight);
+    };
+  }, [content, block.type]);
 
   // Focus on first menu item when menu opens
   useEffect(() => {
@@ -204,6 +257,23 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setIsDragOver(true);
+    
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const width = rect.width;
+    const height = rect.height;
+    
+    if (x < width * 0.2) {
+      setDropPosition('left');
+    } else if (x > width * 0.8) {
+      setDropPosition('right');
+    } else if (y < height * 0.5) {
+      setDropPosition('top');
+    } else {
+      setDropPosition('bottom');
+    }
+
     if (onDragOver) {
       onDragOver(block.id);
     }
@@ -211,13 +281,28 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
 
   const handleDragLeave = () => {
     setIsDragOver(false);
+    setDropPosition(null);
   };
 
   const handleDrop = (e: DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    setDropPosition(null);
     if (onDrop) {
-      onDrop(block.id);
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const width = rect.width;
+      const height = rect.height;
+      
+      let position: 'left' | 'right' | 'top' | 'bottom' | undefined = undefined;
+      
+      if (x < width * 0.2) position = 'left';
+      else if (x > width * 0.8) position = 'right';
+      else if (y < height * 0.5) position = 'top';
+      else position = 'bottom';
+      
+      onDrop(block.id, position);
     }
   };
 
@@ -231,6 +316,37 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
         // Ctrl+Click creates block below
         onAddBelow(block.id);
       }
+    }
+  };
+
+  const handleTextMouseUp = (e: React.MouseEvent) => {
+    const target = e.target as HTMLTextAreaElement;
+    if (target.selectionStart !== target.selectionEnd) {
+      // Position toolbar above the mouse cursor
+      // We use fixed positioning, so clientX/Y works
+      setToolbarPosition({ 
+        top: e.clientY - 50, // 50px above cursor
+        left: e.clientX 
+      });
+      setShowFormatting(true);
+    } else {
+      setShowFormatting(false);
+    }
+  };
+
+  const handleTextKeyUp = (e: React.KeyboardEvent) => {
+    const target = e.target as HTMLTextAreaElement;
+    if (target.selectionStart !== target.selectionEnd) {
+      // For keyboard selection, we don't have mouse coordinates.
+      // We'll position it relative to the textarea itself as a fallback
+      const rect = target.getBoundingClientRect();
+      setToolbarPosition({ 
+        top: rect.top - 40, 
+        left: rect.left + (rect.width / 2) 
+      });
+      setShowFormatting(true);
+    } else {
+      setShowFormatting(false);
     }
   };
 
@@ -309,6 +425,31 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   };
 
   const toggleFormatMode = (format: string) => {
+    // If text is selected, apply formatting immediately
+    if (inputRef.current && inputRef.current instanceof HTMLTextAreaElement) {
+      const start = inputRef.current.selectionStart;
+      const end = inputRef.current.selectionEnd;
+
+      if (start !== end) {
+        const text = content.slice(start, end);
+        let prefix = '';
+        let suffix = '';
+
+        if (format === 'bold') { prefix = '**'; suffix = '**'; }
+        else if (format === 'italic') { prefix = '*'; suffix = '*'; }
+        else if (format === 'underline') { prefix = '<u>'; suffix = '</u>'; }
+        else if (format === 'strikethrough') { prefix = '~~'; suffix = '~~'; }
+
+        const newText = content.slice(0, start) + prefix + text + suffix + content.slice(end);
+        setContent(newText);
+        onUpdate(block.id, { content: newText });
+        
+        // Hide toolbar after applying
+        setShowFormatting(false);
+        return;
+      }
+    }
+
     setActiveFormats(prev => {
       const newFormats = new Set(prev);
       if (newFormats.has(format)) {
@@ -450,7 +591,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   };
 
   const renderInput = () => {
-    const baseClasses = 'w-full bg-transparent border-none outline-none resize-none text-black';
+    const baseClasses = 'w-full bg-transparent border-none outline-none resize-none text-black overflow-hidden';
     const cellMarginStyle = {
       marginBottom: `${globalSettings.cellMarginBottom}px`
     };
@@ -581,9 +722,10 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             onKeyDown={handleKeyDown}
             onFocus={() => {
               onFocus(block.id);
-              setShowFormatting(true);
             }}
             onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+            onMouseUp={handleTextMouseUp}
+            onKeyUp={handleTextKeyUp}
             placeholder="Heading 1"
             className={`${baseClasses} text-4xl font-bold py-2`}
             style={{ marginBottom: `${globalSettings.headingMargins.h1}px` }}
@@ -599,9 +741,10 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             onKeyDown={handleKeyDown}
             onFocus={() => {
               onFocus(block.id);
-              setShowFormatting(true);
             }}
             onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+            onMouseUp={handleTextMouseUp}
+            onKeyUp={handleTextKeyUp}
             placeholder="Heading 2"
             className={`${baseClasses} text-3xl font-bold py-2`}
             style={{ marginBottom: `${globalSettings.headingMargins.h2}px` }}
@@ -617,9 +760,10 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             onKeyDown={handleKeyDown}
             onFocus={() => {
               onFocus(block.id);
-              setShowFormatting(true);
             }}
             onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+            onMouseUp={handleTextMouseUp}
+            onKeyUp={handleTextKeyUp}
             placeholder="Heading 3"
             className={`${baseClasses} text-2xl font-bold py-2`}
             style={{ marginBottom: `${globalSettings.headingMargins.h3}px` }}
@@ -665,13 +809,14 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             onKeyDown={handleKeyDown}
             onFocus={() => {
               onFocus(block.id);
-              setShowFormatting(true);
             }}
             onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+            onMouseUp={handleTextMouseUp}
+            onKeyUp={handleTextKeyUp}
             placeholder="Quote"
             className={`${baseClasses} border-l-4 border-gray-300 pl-4 italic text-gray-700`}
             style={cellMarginStyle}
-            rows={Math.max(1, content.split('\n').length)}
+            rows={1}
           />
         );
       case BlockType.MATH:
@@ -689,7 +834,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
                 }}
                 placeholder="LaTeX math equation (e.g., E = mc^2)"
                 className={`${baseClasses} font-mono text-sm`}
-                rows={Math.max(1, content.split('\n').length)}
+                rows={1}
                 autoFocus
               />
             ) : (
@@ -737,14 +882,15 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
               onKeyDown={handleKeyDown}
               onFocus={() => {
                 onFocus(block.id);
-                setShowFormatting(true);
               }}
               onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+              onMouseUp={handleTextMouseUp}
+              onKeyUp={handleTextKeyUp}
               placeholder="To-do"
               className={`${baseClasses} flex-1 ${
                 block.metadata?.checked ? 'line-through text-gray-500' : ''
               }`}
-              rows={Math.max(1, content.split('\n').length)}
+              rows={1}
             />
           </div>
         );
@@ -759,12 +905,13 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
               onKeyDown={handleKeyDown}
               onFocus={() => {
                 onFocus(block.id);
-                setShowFormatting(true);
               }}
               onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+              onMouseUp={handleTextMouseUp}
+              onKeyUp={handleTextKeyUp}
               placeholder="List"
               className={`${baseClasses} flex-1`}
-              rows={Math.max(1, content.split('\n').length)}
+              rows={1}
             />
           </div>
         );
@@ -779,12 +926,13 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
               onKeyDown={handleKeyDown}
               onFocus={() => {
                 onFocus(block.id);
-                setShowFormatting(true);
               }}
               onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+              onMouseUp={handleTextMouseUp}
+              onKeyUp={handleTextKeyUp}
               placeholder="List"
               className={`${baseClasses} flex-1`}
-              rows={Math.max(1, content.split('\n').length)}
+              rows={1}
             />
           </div>
         );
@@ -797,13 +945,14 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             onKeyDown={handleKeyDown}
             onFocus={() => {
               onFocus(block.id);
-              setShowFormatting(true);
             }}
             onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+            onMouseUp={handleTextMouseUp}
+            onKeyUp={handleTextKeyUp}
             placeholder="Type '/' for commands"
             className={`${baseClasses} text-base`}
             style={cellMarginStyle}
-            rows={Math.max(1, content.split('\n').length)}
+            rows={1}
           />
         ) : (
           <div
@@ -817,9 +966,20 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
     }
   };
 
+  const getDragOverClass = () => {
+    if (!isDragOver || !dropPosition) return '';
+    switch (dropPosition) {
+      case 'top': return 'border-t-4 border-blue-500';
+      case 'bottom': return 'border-b-4 border-blue-500';
+      case 'left': return 'border-l-4 border-blue-500';
+      case 'right': return 'border-r-4 border-blue-500';
+      default: return '';
+    }
+  };
+
   return (
     <div 
-      className={`relative group ${isDragging ? 'opacity-50' : ''} ${isDragOver ? 'border-t-2 border-blue-500' : ''}`}
+      className={`relative group ${isDragging ? 'opacity-50' : ''} ${getDragOverClass()}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -941,9 +1101,12 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
         )}
         </div>
 
-        {/* Formatting Toolbar - below the cell border */}
-        {isActive && showFormatting && ![BlockType.CODE, BlockType.DIVIDER, BlockType.IMAGE, BlockType.VIDEO, BlockType.AUDIO, BlockType.MATH, BlockType.GRID, BlockType.NOTEBOOK_LINK].includes(block.type) && (
-          <div className="mt-1 mr-8 flex justify-end">
+        {/* Floating Formatting Toolbar */}
+        {isActive && showFormatting && toolbarPosition && ![BlockType.CODE, BlockType.DIVIDER, BlockType.IMAGE, BlockType.VIDEO, BlockType.AUDIO, BlockType.MATH, BlockType.GRID, BlockType.NOTEBOOK_LINK].includes(block.type) && (
+          <div 
+            className="fixed z-50"
+            style={{ top: toolbarPosition.top, left: toolbarPosition.left }}
+          >
             <TextFormattingToolbar 
               onFormat={toggleFormatMode} 
               show={true} 

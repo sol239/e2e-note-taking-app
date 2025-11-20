@@ -11,11 +11,12 @@ class NotebookSerializer(serializers.ModelSerializer):
         }
 
 class BlockSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(required=False, help_text='Unique identifier for the block')
+
     class Meta:
         model = Block
         fields = ['id', 'type', 'content', 'metadata', 'settings']
         extra_kwargs = {
-            'id': {'read_only': True, 'help_text': 'Unique identifier for the block'},
             'type': {'help_text': 'Type of block (text, image, code, etc.)'},
             'content': {'help_text': 'Main content of the block'},
             'metadata': {'help_text': 'Additional metadata for the block'},
@@ -34,4 +35,4 @@ class BlockNotebookConnectorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlockNotebookConnector
-        fields = ['block']
+        fields = ['block', 'position_id', 'position_order']

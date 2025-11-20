@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { getNotebookBlocks, getNotebooks } from '../../../api/auth';
 import NoteEditor from '../../../components/NoteEditor';
 import { Block, BlockType } from '../../../models/Block';
-import { Check, X, Loader2, Download } from 'lucide-react';
+import { Check, X, Loader2, Download, Database } from 'lucide-react';
 import SyncWorker from '../../../utils/SyncWorker';
 import ExportModal from '../../../components/ExportModal';
 
@@ -26,7 +26,9 @@ export default function NotebookPage() {
   const [existingBlockIds, setExistingBlockIds] = useState<Set<string>>(new Set());
   const [previousBlocks, setPreviousBlocks] = useState<Map<string, Block>>(new Map());
   const [showExportModal, setShowExportModal] = useState(false);
+  const [isDatabaseView, setIsDatabaseView] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const mainContentRef = useRef<HTMLDivElement>(null);
   const syncWorker = useRef(SyncWorker.getInstance());
 
   useEffect(() => {
@@ -48,9 +50,19 @@ export default function NotebookPage() {
             connector.block.type as BlockType,
             connector.block.content,
             connector.block.metadata,
-            connector.block.settings
+            connector.block.settings,
+            connector.position_id,
+            connector.position_order
           )
         );
+        // Sort blocks by position_id and then position_order
+        convertedBlocks.sort((a, b) => {
+          if (a.position_id !== b.position_id) {
+            return a.position_id - b.position_id;
+          }
+          return a.position_order - b.position_order;
+        });
+        
         setBlocks(convertedBlocks);
         
         // Track which blocks exist in the database
@@ -70,9 +82,26 @@ export default function NotebookPage() {
     };
 
     if (notebookId) {
+      // redirect to login if not authenticated
+      if (typeof window !== 'undefined' && !localStorage.getItem('authToken')) {
+        router.push('/login');
+        return;
+      }
       fetchNotebookData();
     }
   }, [notebookId]);
+
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (mainContentRef.current && mainContentRef.current.contains(e.target as Node)) {
+        const clipboardData = e.clipboardData?.getData('text/plain');
+        console.log('Clipboard content:', clipboardData);
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, []);
 
   const queueNotebookNameSync = (newName: string) => {
     syncWorker.current.queueNotebookNameSync(
@@ -144,12 +173,14 @@ export default function NotebookPage() {
         // New block
         return true;
       }
-      // Check if block content, type, metadata, or settings changed
+      // Check if block content, type, metadata, settings, or position changed
       return (
         prevBlock.content !== block.content ||
         prevBlock.type !== block.type ||
         JSON.stringify(prevBlock.metadata) !== JSON.stringify(block.metadata) ||
-        JSON.stringify(prevBlock.settings) !== JSON.stringify(block.settings)
+        JSON.stringify(prevBlock.settings) !== JSON.stringify(block.settings) ||
+        prevBlock.position_id !== block.position_id ||
+        prevBlock.position_order !== block.position_order
       );
     });
     
@@ -288,7 +319,7 @@ export default function NotebookPage() {
   }
 
   return (
-    <div className="min-h-full bg-gradient-to-br from-blue-50 via-white to-purple-50 p-8">
+    <div className="min-h-full bg-white p-8">
       {/* Header / Sync Status */}
       <div className="max-w-4xl mx-auto mb-4 flex justify-end items-center space-x-2">
         <button
@@ -297,6 +328,17 @@ export default function NotebookPage() {
         >
           <Download className="w-3 h-3" />
           <span>Export</span>
+        </button>
+        <button
+          onClick={() => setIsDatabaseView(!isDatabaseView)}
+          className={`flex items-center space-x-1 px-3 py-1 rounded-full text-xs transition-colors ${
+            isDatabaseView 
+              ? 'bg-gray-800 text-white hover:bg-gray-700' 
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          <Database className="w-3 h-3" />
+          <span>Database View</span>
         </button>
         <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs ${
           syncStatus === 'synced' 
@@ -318,12 +360,39 @@ export default function NotebookPage() {
 
       {/* Main Content */}
       <main className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-[calc(100vh-8rem)]">
-          <NoteEditor
-            initialBlocks={blocks}
-            onChange={handleBlocksChange}
-            nonDeletableBlockIds={new Set(blocks.length > 0 && blocks[0].type === BlockType.HEADING1 ? [blocks[0].id] : [])}
-          />
+        <div ref={mainContentRef} className="min-h-[calc(100vh-8rem)]">
+          {isDatabaseView ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Content</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metadata</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Settings</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {blocks.map((block) => (
+                    <tr key={block.id}>
+                      <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-gray-500">{block.id}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-gray-900">{block.type}</td>
+                      <td className="px-6 py-4 text-gray-500 max-w-xs truncate" title={block.content}>{block.content}</td>
+                      <td className="px-6 py-4 text-gray-500 max-w-xs truncate">{JSON.stringify(block.metadata)}</td>
+                      <td className="px-6 py-4 text-gray-500 max-w-xs truncate">{JSON.stringify(block.settings)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <NoteEditor
+              initialBlocks={blocks}
+              onChange={handleBlocksChange}
+              nonDeletableBlockIds={new Set(blocks.length > 0 && blocks[0].type === BlockType.HEADING1 ? [blocks[0].id] : [])}
+            />
+          )}
         </div>
       </main>
       {showExportModal && (

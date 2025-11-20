@@ -16,7 +16,8 @@ class SyncWorker {
   private static instance: SyncWorker;
   private queue: Map<string, QueuedOperation> = new Map();
   private processing: Set<string> = new Set();
-  private readonly SYNC_DELAY_MS = 3000;
+  private createdBlocks: Set<string> = new Set();
+  private readonly SYNC_DELAY_MS = 300;
 
   private constructor() {
     // Singleton pattern - private constructor
@@ -221,23 +222,54 @@ class SyncWorker {
     onStatusChange?.(block.id, 'syncing');
 
     try {
-      if (isNew) {
+      // Check if we already created this block in this session
+      // If so, treat as update even if queued as new
+      const shouldCreate = isNew && !this.createdBlocks.has(block.id);
+
+      if (shouldCreate) {
         await createBlock(notebookId, {
           id: block.id,
           type: block.type,
           content: block.content,
           metadata: block.metadata,
           settings: block.settings,
-        });
+          position_id: block.position_id,
+          position_order: block.position_order,
+        } as any);
+        this.createdBlocks.add(block.id);
         console.log('Block created:', block.id);
       } else {
-        await updateBlock(notebookId, block.id, {
-          type: block.type,
-          content: block.content,
-          metadata: block.metadata,
-          settings: block.settings,
-        });
-        console.log('Block updated:', block.id);
+        try {
+          await updateBlock(notebookId, block.id, {
+            type: block.type,
+            content: block.content,
+            metadata: block.metadata,
+            settings: block.settings,
+            position_id: block.position_id,
+            position_order: block.position_order,
+          } as any);
+          console.log('Block updated:', block.id);
+        } catch (error) {
+          // If update fails with 404, try creating it instead
+          // This handles cases where a block was created locally but failed to sync initially,
+          // or if the server state was reset/lost
+          if (error instanceof Error && error.message.includes('404')) {
+            console.log('Block update failed with 404, attempting creation:', block.id);
+            await createBlock(notebookId, {
+              id: block.id,
+              type: block.type,
+              content: block.content,
+              metadata: block.metadata,
+              settings: block.settings,
+              position_id: block.position_id,
+              position_order: block.position_order,
+            } as any);
+            this.createdBlocks.add(block.id);
+            console.log('Block created (recovery):', block.id);
+          } else {
+            throw error;
+          }
+        }
       }
       onStatusChange?.(block.id, 'synced');
     } catch (error) {

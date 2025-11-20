@@ -49,6 +49,8 @@ export interface IBlock {
       padding?: number;
     };
   };
+  position_id?: number;
+  position_order?: number;
 }
 
 export class Block implements IBlock {
@@ -80,6 +82,8 @@ export class Block implements IBlock {
       padding?: number;
     };
   };
+  position_id?: number;
+  position_order?: number;
 
   constructor(
     id: string,
@@ -109,17 +113,21 @@ export class Block implements IBlock {
         borderRadius?: number;
         padding?: number;
       };
-    }
+    },
+    position_id: number = 0,
+    position_order: number = 0
   ) {
     this.id = id;
     this.type = type;
     this.content = content;
     this.metadata = metadata;
     this.settings = settings;
+    this.position_id = position_id;
+    this.position_order = position_order;
   }
 
   clone(): Block {
-    return new Block(this.id, this.type, this.content, { ...this.metadata }, this.settings);
+    return new Block(this.id, this.type, this.content, { ...this.metadata }, this.settings, this.position_id, this.position_order);
   }
 
   isEmpty(): boolean {

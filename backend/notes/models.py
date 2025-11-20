@@ -32,6 +32,8 @@ class Block(models.Model):
 class BlockNotebookConnector(models.Model):
     block = models.ForeignKey(Block, on_delete=models.CASCADE)
     notebook = models.ForeignKey(Notebook, on_delete=models.CASCADE)
+    position_id = models.IntegerField(default=0)
+    position_order = models.IntegerField(default=0)
 
     class Meta:
         unique_together = ('block', 'notebook')

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download } from 'lucide-react';
+import { exportNotebook } from '../api/auth';
 
 interface ExportModalProps {
   notebookId: string;
@@ -10,12 +11,20 @@ interface ExportModalProps {
 }
 
 export default function ExportModal({ notebookId, onClose }: ExportModalProps) {
-  const [exportFormat, setExportFormat] = useState<'html' | 'pdf' | 'markdown'>('html');
+  const [exportFormat, setExportFormat] = useState<'html' | 'pdf' | 'markdown' | 'zip'>('html');
+  const [exporting, setExporting] = useState(false);
 
-  const handleExport = () => {
-    // TODO: Implement actual export logic
-    console.log(`Exporting notebook ${notebookId} as ${exportFormat}`);
-    onClose();
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportNotebook(notebookId, exportFormat);
+      onClose();
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const modal = (
@@ -67,22 +76,35 @@ export default function ExportModal({ notebookId, onClose }: ExportModalProps) {
               />
               Markdown
             </label>
+            <label className="flex items-center text-black">
+              <input
+                type="radio"
+                name="exportFormat"
+                value="zip"
+                checked={exportFormat === 'zip'}
+                onChange={(e) => setExportFormat(e.target.value as 'zip')}
+                className="mr-2"
+              />
+              ZIP (Backup with assets)
+            </label>
           </div>
         </div>
 
         <div className="flex justify-end space-x-3">
           <button
             onClick={onClose}
+            disabled={exporting}
             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
           >
             Cancel
           </button>
           <button
             onClick={handleExport}
+            disabled={exporting}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
           >
             <Download className="w-4 h-4 mr-2" />
-            Export
+            {exporting ? 'Exporting...' : 'Export'}
           </button>
         </div>
       </div>
