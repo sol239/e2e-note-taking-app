@@ -153,8 +153,8 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'EncNotes API',
-    'DESCRIPTION': 'API documentation for EncNotes - End-to-End Encrypted Note Taking App',
+    'TITLE': 'Notes API',
+    'DESCRIPTION': 'API documentation for Notes - End-to-End Encrypted Note Taking App',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'SWAGGER_UI_DIST': 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.10.3',

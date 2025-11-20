@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { getNotebookBlocks, getNotebooks } from '../../../api/auth';
 import NoteEditor from '../../../components/NoteEditor';
 import { Block, BlockType } from '../../../models/Block';
-import { Check, X, Loader2 } from 'lucide-react';
+import { Check, X, Loader2, Download } from 'lucide-react';
 import SyncWorker from '../../../utils/SyncWorker';
+import ExportModal from '../../../components/ExportModal';
 
 export default function NotebookPage() {
   const params = useParams();
@@ -24,6 +25,7 @@ export default function NotebookPage() {
   const [blockSyncStates, setBlockSyncStates] = useState<Map<string, 'pending' | 'syncing' | 'synced' | 'error'>>(new Map());
   const [existingBlockIds, setExistingBlockIds] = useState<Set<string>>(new Set());
   const [previousBlocks, setPreviousBlocks] = useState<Map<string, Block>>(new Map());
+  const [showExportModal, setShowExportModal] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const syncWorker = useRef(SyncWorker.getInstance());
 
@@ -286,78 +288,37 @@ export default function NotebookPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Navigation */}
-      <nav className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <Link href="/notebooks" className="text-gray-600 hover:text-gray-900 transition-colors">
-                ← Back to Notebooks
-              </Link>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs ${
-                  syncStatus === 'synced' 
-                    ? 'bg-green-100 text-green-800' 
-                    : syncStatus === 'syncing'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {syncStatus === 'synced' ? (
-                    <Check className="w-3 h-3" />
-                  ) : syncStatus === 'syncing' ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <X className="w-3 h-3" />
-                  )}
-                  <span>{syncStatus === 'synced' ? 'Synced' : syncStatus === 'syncing' ? 'Syncing' : 'Sync error'}</span>
-                </div>
-                {isEditingName ? (
-                  <div className="flex items-center space-x-2">
-                    <Check
-                      className="w-4 h-4 text-gray-700 cursor-pointer hover:text-gray-900"
-                      onClick={handleNameSave}
-                    />
-                    <input
-                      ref={nameInputRef}
-                      type="text"
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      onBlur={handleNameSave}
-                      onKeyDown={handleNameKeyDown}
-                      className="text-gray-600 bg-white border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
-                      style={{ width: `${Math.max(editingName.length * 8, 120)}px` }}
-                    />
-                  </div>
-                ) : (
-                  <span
-                    className="text-gray-600 cursor-pointer hover:text-gray-800"
-                    onDoubleClick={handleNameDoubleClick}
-                    title="Double-click to edit name"
-                  >
-                    {notebookName}
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => {
-                  localStorage.removeItem('authToken');
-                  router.push('/login');
-                }}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
+    <div className="min-h-full bg-gradient-to-br from-blue-50 via-white to-purple-50 p-8">
+      {/* Header / Sync Status */}
+      <div className="max-w-4xl mx-auto mb-4 flex justify-end items-center space-x-2">
+        <button
+          onClick={() => setShowExportModal(true)}
+          className="flex items-center space-x-1 px-3 py-1 rounded-full text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
+        >
+          <Download className="w-3 h-3" />
+          <span>Export</span>
+        </button>
+        <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs ${
+          syncStatus === 'synced' 
+            ? 'bg-green-100 text-green-800' 
+            : syncStatus === 'syncing'
+            ? 'bg-blue-100 text-blue-800'
+            : 'bg-red-100 text-red-800'
+        }`}>
+          {syncStatus === 'synced' ? (
+            <Check className="w-3 h-3" />
+          ) : syncStatus === 'syncing' ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <X className="w-3 h-3" />
+          )}
+          <span>{syncStatus === 'synced' ? 'Synced' : syncStatus === 'syncing' ? 'Syncing' : 'Sync error'}</span>
         </div>
-      </nav>
+      </div>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+      <main className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-[calc(100vh-8rem)]">
           <NoteEditor
             initialBlocks={blocks}
             onChange={handleBlocksChange}
@@ -365,6 +326,12 @@ export default function NotebookPage() {
           />
         </div>
       </main>
+      {showExportModal && (
+        <ExportModal
+          notebookId={notebookId}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
     </div>
   );
 }

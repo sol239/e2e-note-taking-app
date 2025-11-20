@@ -39,10 +39,38 @@ export interface Block {
   settings: Record<string, unknown>;
 }
 
-export interface BlockConnector {
-  id: number;
-  block: Block;
-  notebook: string;
+export interface User {
+  email: string;
+  first_name: string;
+  last_name: string;
+  nickname: string;
+}
+
+export async function getUser(): Promise<User> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    throw new Error('No auth token found');
+  }
+
+  const url = `${API_BASE_URL}/user/`;
+  FrontendHub.logRequest(url, 'GET');
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Token ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    FrontendHub.logError(url, `Status: ${response.status}`);
+    throw new Error('Failed to fetch user');
+  }
+
+  const data = await response.json();
+  FrontendHub.logResponse(url, response.status, data);
+  return data;
 }
 
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {

@@ -5,6 +5,7 @@ from rest_framework import permissions
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
 from accounts.models import User
+from .serializers import UserSerializer, UpdateNicknameSerializer
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -16,13 +17,33 @@ def register(request):
     """
     email = request.data.get('email')
     password = request.data.get('password')
+    nickname = request.data.get('nickname')
     if not email or not password:
         return Response({'error': 'Email and password required'}, status=status.HTTP_400_BAD_REQUEST)
     if User.objects.filter(email=email).exists():
         return Response({'error': 'User already exists'}, status=status.HTTP_400_BAD_REQUEST)
-    user = User.objects.create_user(email=email, password=password)
+    user = User.objects.create_user(email=email, password=password, nickname=nickname)
     token, created = Token.objects.get_or_create(user=user)
     return Response({'token': token.key}, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([permissions.IsAuthenticated])
+def user_detail(request):
+    """
+    Retrieve and update the current authenticated user. PATCH allows updating the nickname.
+    """
+    if request.method == 'GET':
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+
+    if request.method == 'PATCH':
+        serializer = UpdateNicknameSerializer(data=request.data)
+        if serializer.is_valid():
+            request.user.nickname = serializer.validated_data.get('nickname')
+            request.user.save()
+            return Response(UserSerializer(request.user).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])

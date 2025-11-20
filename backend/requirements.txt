@@ -1,6 +1,5 @@
 django
 djangorestframework
-djangorestframework-authtoken
 django-cors-headers
 drf-spectacular
 django-cors-headers
