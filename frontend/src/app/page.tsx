@@ -1,6 +1,19 @@
-﻿import Link from 'next/link';
+﻿"use client";
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function LandingPage() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    // Check if user is logged in
+    const token = localStorage.getItem('authToken');
+    setIsLoggedIn(!!token);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Navigation */}
@@ -9,20 +22,9 @@ export default function LandingPage() {
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">E</span>
+                <span className="text-white font-bold text-sm">N</span>
               </div>
-              <span className="text-xl font-bold text-gray-900">EncNotes</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Link href="/login" className="text-gray-600 hover:text-gray-900 transition-colors">
-                Login
-              </Link>
-              <Link
-                href="/register"
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
-              >
-                Get Started
-              </Link>
+              <span className="text-xl font-bold text-gray-900">Notes</span>
             </div>
           </div>
         </div>
@@ -39,18 +41,29 @@ export default function LandingPage() {
             Take notes with end-to-end encryption. Create, organize, and secure your thoughts with our modern note-taking platform.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/register"
-              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
-            >
-              Start Writing Securely
-            </Link>
-            <Link
-              href="/demo"
-              className="border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-lg text-lg font-semibold hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
-            >
-              Try Demo
-            </Link>
+            {isLoggedIn ? (
+              <Link
+                href="/notebooks"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
+              >
+                Open Your Notebooks
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-lg text-lg font-semibold hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/register"
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -60,7 +73,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Why Choose EncNotes?
+              Why Choose Notes?
             </h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Experience the future of secure note-taking with our comprehensive feature set.
@@ -108,7 +121,7 @@ export default function LandingPage() {
             Ready to Secure Your Thoughts?
           </h2>
           <p className="text-xl text-blue-100 mb-8">
-            Join thousands of users who trust EncNotes with their most important ideas.
+            Join thousands of users who trust Notes with their most important ideas.
           </p>
           <Link
             href="/register"
@@ -125,12 +138,12 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="flex items-center space-x-2 mb-4 md:mb-0">
               <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">E</span>
+                <span className="text-white font-bold text-sm">N</span>
               </div>
-              <span className="text-xl font-bold">EncNotes</span>
+              <span className="text-xl font-bold">Notes</span>
             </div>
             <div className="text-gray-400 text-sm">
-               2025 EncNotes. Your notes, your privacy.
+               2025 Notes. Your notes, your privacy.
             </div>
           </div>
         </div>

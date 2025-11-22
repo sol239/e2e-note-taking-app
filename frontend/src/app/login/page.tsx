@@ -37,9 +37,9 @@ export default function LoginPage() {
           <div className="flex justify-between items-center py-4">
             <Link href="/" className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">E</span>
+                <span className="text-white font-bold text-sm">N</span>
               </div>
-              <span className="text-xl font-bold text-gray-900">EncNotes</span>
+              <span className="text-xl font-bold text-gray-900">Notes</span>
             </Link>
             <div className="flex items-center space-x-4">
               <Link href="/login" className="text-gray-600 hover:text-gray-900 transition-colors">
@@ -61,7 +61,7 @@ export default function LoginPage() {
         <div className="max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-            <p className="text-gray-600">Sign in to your EncNotes account</p>
+            <p className="text-gray-600">Sign in to your Notes account</p>
           </div>
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
