@@ -622,7 +622,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   };
 
   const renderInput = () => {
-    const baseClasses = 'w-full bg-transparent border-none outline-none resize-none text-black overflow-hidden';
+    const baseClasses = 'w-full bg-transparent border-none outline-none resize-none overflow-hidden text-inherit';
     const cellMarginStyle = {
       marginBottom: `${globalSettings.cellMarginBottom}px`
     };
@@ -845,7 +845,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             onMouseUp={handleTextMouseUp}
             onKeyUp={handleTextKeyUp}
             placeholder="Quote"
-            className={`${baseClasses} border-l-4 border-gray-300 pl-4 italic text-gray-700`}
+            className={`${baseClasses} border-l-4 border-gray-300 pl-4 italic`}
             style={cellMarginStyle}
             rows={1}
           />
@@ -885,14 +885,6 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
                 dangerouslySetInnerHTML={{ __html: content ? renderMath(content) : '<span class="text-gray-400 italic">Double-click to add LaTeX equation</span>' }}
               />
             )}
-            <style dangerouslySetInnerHTML={{__html: `
-              .katex-container .katex {
-                color: #000000 !important;
-              }
-              .katex-container .katex * {
-                color: #000000 !important;
-              }
-            `}} />
           </div>
         );
       case BlockType.TODO:
@@ -930,7 +922,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       case BlockType.BULLETED_LIST:
         return (
           <div className="flex items-start gap-2" style={cellMarginStyle}>
-            <span className="text-xl mt-0.5 text-black">•</span>
+            <span className="text-xl mt-0.5">•</span>
             <textarea
               ref={inputRef as React.RefObject<HTMLTextAreaElement>}
               value={content}
@@ -951,7 +943,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       case BlockType.NUMBERED_LIST:
         return (
           <div className="flex items-start gap-2" style={cellMarginStyle}>
-            <span className="mt-0.5 text-black">1.</span>
+            <span className="mt-0.5">1.</span>
             <textarea
               ref={inputRef as React.RefObject<HTMLTextAreaElement>}
               value={content}
@@ -1059,7 +1051,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
         </div>
 
         <div
-          className={`pt-0 pb-1 px-2 rounded transition-colors flex-1 ${
+          className={`pt-0 pb-1 px-2 rounded transition-colors flex-1 text-black ${
             isActive ? '' : ''
           }`}
           style={getBlockContainerStyle()}

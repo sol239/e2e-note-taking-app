@@ -135,20 +135,32 @@ export default function SettingsContent() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Block Spacing</label>
-                                <div className="flex items-center gap-4">
-                                    <div className="relative w-32">
-                                        <input
-                                            type="number"
-                                            value={settings.cellMarginBottom}
-                                            onChange={(e) => updateSettings({ cellMarginBottom: parseInt(e.target.value) || 0 })}
-                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all pr-8"
-                                            min="0"
-                                            max="100"
-                                        />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 pointer-events-none">px</span>
+                                <label className="block text-sm font-medium text-gray-700 mb-3">Block Spacing</label>
+                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                    <div className="flex items-center gap-4 mb-2">
+                                        <div className="flex-1">
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="64"
+                                                value={settings.cellMarginBottom}
+                                                onChange={(e) => updateSettings({ cellMarginBottom: parseInt(e.target.value) || 0 })}
+                                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                            />
+                                        </div>
+                                        <div className="relative w-24">
+                                            <input
+                                                type="number"
+                                                value={settings.cellMarginBottom}
+                                                onChange={(e) => updateSettings({ cellMarginBottom: parseInt(e.target.value) || 0 })}
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all pr-8 text-right"
+                                                min="0"
+                                                max="100"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 pointer-events-none">px</span>
+                                        </div>
                                     </div>
-                                    <p className="text-sm text-gray-500">Space between content blocks</p>
+                                    <p className="text-xs text-gray-500">Controls vertical spacing between paragraphs, lists, and other standard blocks.</p>
                                 </div>
                             </div>
                         </div>
