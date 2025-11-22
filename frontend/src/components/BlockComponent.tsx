@@ -17,6 +17,7 @@ import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { Settings } from 'lucide-react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
+import WYSIWYGEditor, { WYSIWYGEditorRef } from './WYSIWYGEditor';
 
 interface BlockComponentProps {
   block: Block;
@@ -68,7 +69,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0 });
   const [initialSize, setInitialSize] = useState({ width: 0, height: 0 });
   const [toolbarPosition, setToolbarPosition] = useState<{ top: number; left: number } | null>(null);
-  const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement | WYSIWYGEditorRef>(null);
   const firstMenuItemRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -425,6 +426,12 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   };
 
   const toggleFormatMode = (format: string) => {
+    // Check if we are using WYSIWYGEditor
+    if (inputRef.current && 'toggleFormat' in inputRef.current) {
+      (inputRef.current as WYSIWYGEditorRef).toggleFormat(format);
+      return;
+    }
+
     // If text is selected, apply formatting immediately
     if (inputRef.current && inputRef.current instanceof HTMLTextAreaElement) {
       const start = inputRef.current.selectionStart;
@@ -514,6 +521,30 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
     } catch {
       return latex;
     }
+  };
+
+  // Basic inline markdown-like renderer for paragraph preview
+  const renderInlineFormattingHTML = (raw: string | undefined) => {
+    if (!raw) return '';
+
+    // Escape HTML to be safe, then selectively allow a couple of tags (u)
+    const escapeHtml = (s: string) =>
+      s.replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    let out = escapeHtml(raw);
+
+    // Allow <u> and </u> (toggleFormatMode inserts <u> tags). We only allow exact tags.
+    out = out.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, '<u>$1</u>');
+
+    // Convert bold/italic/strikethrough markers
+    // Bold first to avoid clobbering the italic markers inside
+    out = out.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/~~(.*?)~~/g, '<del>$1</del>');
+    out = out.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    return out;
   };
 
   const getBlockIcon = () => {
@@ -845,7 +876,9 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
                   setTimeout(() => {
                     if (inputRef.current) {
                       inputRef.current.focus();
-                      inputRef.current.select();
+                      if ('select' in inputRef.current) {
+                        (inputRef.current as HTMLTextAreaElement | HTMLInputElement).select();
+                      }
                     }
                   }, 0);
                 }}
@@ -938,30 +971,27 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
         );
       default:
         return isActive ? (
-          <textarea
-            ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-            value={content}
-            onChange={(e) => handleChange(e.target.value)}
+          <WYSIWYGEditor
+            ref={inputRef as React.RefObject<WYSIWYGEditorRef>}
+            content={content}
+            onChange={handleChange}
             onKeyDown={handleKeyDown}
-            onFocus={() => {
-              onFocus(block.id);
-            }}
+            onFocus={() => onFocus(block.id)}
             onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
             onMouseUp={handleTextMouseUp}
             onKeyUp={handleTextKeyUp}
             placeholder="Type '/' for commands"
             className={`${baseClasses} text-base`}
             style={cellMarginStyle}
-            rows={1}
           />
         ) : (
           <div
             className={`${baseClasses} text-base cursor-text whitespace-pre-wrap`}
             style={cellMarginStyle}
             onClick={() => onFocus(block.id)}
-          >
-            {content || <span className="text-gray-400 italic">Type &apos;/&apos; for commands</span>}
-          </div>
+            // Render HTML content directly
+            dangerouslySetInnerHTML={{ __html: content || '<span class="text-gray-400 italic">Type \'/\' for commands</span>' }}
+          />
         );
     }
   };
