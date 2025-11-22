@@ -43,7 +43,9 @@ export const GlobalSettingsPanel: React.FC<GlobalSettingsPanelProps> = ({ isOpen
           <div className="mb-6">
             <h3 className="text-lg font-medium text-gray-800 mb-3">Heading Margins</h3>
             <div className="space-y-3">
-              {Object.entries(settings.headingMargins).map(([heading, margin]) => (
+              {Object.entries(settings.headingMargins)
+                .filter(([heading]) => ['h1', 'h2', 'h3'].includes(heading))
+                .map(([heading, margin]) => (
                 <div key={heading} className="flex items-center justify-between">
                   <label className="text-sm font-medium text-gray-700 capitalize">
                     {heading.replace('h', 'H')} Margin Bottom:

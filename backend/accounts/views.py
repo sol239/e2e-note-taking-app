@@ -5,7 +5,7 @@ from rest_framework import permissions
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
 from accounts.models import User
-from .serializers import UserSerializer, UpdateNicknameSerializer
+from .serializers import UserSerializer, UpdateUserSerializer
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -38,9 +38,12 @@ def user_detail(request):
         return Response(serializer.data)
 
     if request.method == 'PATCH':
-        serializer = UpdateNicknameSerializer(data=request.data)
+        serializer = UpdateUserSerializer(data=request.data)
         if serializer.is_valid():
-            request.user.nickname = serializer.validated_data.get('nickname')
+            if 'nickname' in serializer.validated_data:
+                request.user.nickname = serializer.validated_data.get('nickname')
+            if 'email' in serializer.validated_data:
+                request.user.email = serializer.validated_data.get('email')
             request.user.save()
             return Response(UserSerializer(request.user).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
