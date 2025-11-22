@@ -105,7 +105,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ initialBlocks, onChange, nonDel
     }
   };
 
-  const handleAddBlockBelow = (id: string) => {
+  const handleAddBlockBelow = (id: string, type: BlockType = BlockType.PARAGRAPH) => {
     const currentBlocks = documentManager.getBlocks();
     const currentBlock = currentBlocks.find(b => b.id === id);
     if (!currentBlock) return;
@@ -121,7 +121,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ initialBlocks, onChange, nonDel
 
     const newBlock = new Block(
       documentManager.generateId(),
-      BlockType.PARAGRAPH,
+      type,
       '',
       undefined,
       undefined,
@@ -368,29 +368,38 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ initialBlocks, onChange, nonDel
         className="flex flex-col"
         style={{ gap: `${globalSettings.cellMarginBottom}px` }}
       >
-        {sortedRowIds.map((rowId) => (
+        {sortedRowIds.map((rowId, rowIndex) => (
           <div key={rowId} className="flex flex-row w-full gap-2">
-            {rows.get(rowId)!.map((block) => (
-              <div key={block.id} className="flex-1 min-w-0">
-                <BlockComponent
-                  block={block}
-                  allBlocks={blocks}
-                  onUpdate={handleUpdateBlock}
-                  onDelete={handleDeleteBlock}
-                  onAddBelow={handleAddBlockBelow}
-                  onAddAbove={handleAddBlockAbove}
-                  onFocus={setActiveBlockId}
-                  onMoveUp={handleMoveUp}
-                  onMoveDown={handleMoveDown}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                  onCreateBlock={handleCreateBlock}
-                  isActive={activeBlockId === block.id}
-                  isDeletable={!nonDeletableBlockIds.has(block.id)}
-                />
-              </div>
-            ))}
+            {rows.get(rowId)!.map((block, colIndex) => {
+              // The first block (top-left) is considered the notebook title
+              const isFirstBlock = rowIndex === 0 && colIndex === 0;
+              // Only treat it as special if it's an H1 block (as per user request)
+              const isTitleBlock = isFirstBlock && block.type === BlockType.HEADING1;
+
+              return (
+                <div key={block.id} className="flex-1 min-w-0">
+                  <BlockComponent
+                    block={block}
+                    allBlocks={blocks}
+                    onUpdate={handleUpdateBlock}
+                    onDelete={handleDeleteBlock}
+                    onAddBelow={handleAddBlockBelow}
+                    onAddAbove={handleAddBlockAbove}
+                    onFocus={setActiveBlockId}
+                    onMoveUp={handleMoveUp}
+                    onMoveDown={handleMoveDown}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    onCreateBlock={handleCreateBlock}
+                    isActive={activeBlockId === block.id}
+                    isDeletable={!nonDeletableBlockIds.has(block.id)}
+                    isDraggable={!isTitleBlock}
+                    canAddAbove={!isTitleBlock}
+                  />
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>

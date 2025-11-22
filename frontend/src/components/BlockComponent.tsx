@@ -24,7 +24,7 @@ interface BlockComponentProps {
   allBlocks: Block[];
   onUpdate: (id: string, updates: Partial<Block>) => void;
   onDelete: (id: string) => void;
-  onAddBelow: (id: string) => void;
+  onAddBelow: (id: string, type?: BlockType) => void;
   onAddAbove: (id: string) => void;
   onFocus: (id: string) => void;
   onMoveUp: (id: string) => void;
@@ -35,6 +35,8 @@ interface BlockComponentProps {
   onCreateBlock: (blockType: BlockType) => string;
   isActive: boolean;
   isDeletable?: boolean;
+  isDraggable?: boolean;
+  canAddAbove?: boolean;
 }
 
 const BlockComponent: React.FC<BlockComponentProps> = ({
@@ -53,6 +55,8 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   onCreateBlock,
   isActive,
   isDeletable = true,
+  isDraggable = true,
+  canAddAbove = true,
 }) => {
   const { settings: globalSettings } = useGlobalSettings();
   const [showMenu, setShowMenu] = useState(false);
@@ -223,12 +227,21 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       } else {
         // Regular Enter creates new block below
         e.preventDefault();
-        onAddBelow(block.id);
+        // If current block is BULLETED_LIST, create another BULLETED_LIST
+        if (block.type === BlockType.BULLETED_LIST) {
+          onAddBelow(block.id, BlockType.BULLETED_LIST);
+        } else if (block.type === BlockType.NUMBERED_LIST) {
+          onAddBelow(block.id, BlockType.NUMBERED_LIST);
+        } else {
+          onAddBelow(block.id);
+        }
       }
     } else if (e.key === 'Enter' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
       // Ctrl+Shift+Enter creates new block above
       e.preventDefault();
-      onAddAbove(block.id);
+      if (canAddAbove) {
+        onAddAbove(block.id);
+      }
     } else if (e.key === 'Backspace' && content === '' && !e.shiftKey && isDeletable) {
       e.preventDefault();
       onDelete(block.id);
@@ -312,7 +325,9 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       e.preventDefault();
       if (e.shiftKey) {
         // Ctrl+Shift+Click creates block above
-        onAddAbove(block.id);
+        if (canAddAbove) {
+          onAddAbove(block.id);
+        }
       } else {
         // Ctrl+Click creates block below
         onAddBelow(block.id);
@@ -398,6 +413,27 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   }, [isResizing, handleResizeMove, handleResizeEnd]);
 
   const handleChange = (value: string) => {
+    // Auto-formatting: Check for "- " at start
+    if (value.startsWith('- ') && block.type === BlockType.PARAGRAPH) {
+      // Remove the "- " prefix
+      const cleanText = value.substring(2);
+      // Update block type to BULLETED_LIST
+      onUpdate(block.id, { type: BlockType.BULLETED_LIST, content: cleanText });
+      setContent(cleanText);
+      return;
+    }
+
+    // Auto-formatting: Check for "1. " or "N. " at start
+    const numberedListMatch = value.match(/^(\d+)\.\s/);
+    if (numberedListMatch && block.type === BlockType.PARAGRAPH) {
+      // Remove the "N. " prefix
+      const cleanText = value.substring(numberedListMatch[0].length);
+      // Update block type to NUMBERED_LIST
+      onUpdate(block.id, { type: BlockType.NUMBERED_LIST, content: cleanText });
+      setContent(cleanText);
+      return;
+    }
+
     // Apply active formats to new text
     let newText = value;
     const prevContent = content;
@@ -941,9 +977,22 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
           </div>
         );
       case BlockType.NUMBERED_LIST:
+        // Calculate the number based on preceding numbered list blocks
+        let listNumber = 1;
+        const currentBlockIndex = allBlocks.findIndex(b => b.id === block.id);
+        if (currentBlockIndex > 0) {
+          for (let i = currentBlockIndex - 1; i >= 0; i--) {
+            if (allBlocks[i].type === BlockType.NUMBERED_LIST) {
+              listNumber++;
+            } else {
+              break;
+            }
+          }
+        }
+
         return (
           <div className="flex items-start gap-2" style={cellMarginStyle}>
-            <span className="mt-0.5">1.</span>
+            <span className="mt-0.5">{listNumber}.</span>
             <textarea
               ref={inputRef as React.RefObject<HTMLTextAreaElement>}
               value={content}
@@ -1007,27 +1056,29 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       onDrop={handleDrop}
     >
       <div className="flex items-start gap-1">
-        <div className="flex flex-col items-center">
+        <div className="flex items-center gap-1">
           {/* Drag handle button on the left */}
           <button
-            draggable
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
+            draggable={isDraggable}
+            onDragStart={isDraggable ? handleDragStart : undefined}
+            onDragEnd={isDraggable ? handleDragEnd : undefined}
             onClick={(e) => {
               if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
                 e.stopPropagation();
                 if (e.shiftKey) {
                   // Ctrl+Shift+Click creates cell above
-                  onAddAbove(block.id);
+                  if (canAddAbove) {
+                    onAddAbove(block.id);
+                  }
                 } else {
                   // Ctrl+Click creates cell below
                   onAddBelow(block.id);
                 }
               }
             }}
-            className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 flex-shrink-0 cursor-grab active:cursor-grabbing"
-            title="Drag to reorder | Ctrl+Click: add below | Ctrl+Shift+Click: add above"
+            className={`opacity-0 group-hover:opacity-100 transition-opacity mt-2 p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 flex-shrink-0 ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
+            title={`Drag to reorder | Ctrl+Click: add below${canAddAbove ? ' | Ctrl+Shift+Click: add above' : ''}`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <circle cx="6" cy="5" r="1.5" />
