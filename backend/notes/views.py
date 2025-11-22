@@ -3,6 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.http import HttpResponse
+from django.utils import timezone
 from .models import Notebook, Block, NotebookUserConnector, BlockNotebookConnector
 from .serializers import NotebookSerializer, BlockSerializer, NotebookUserConnectorSerializer, BlockNotebookConnectorSerializer
 import json
@@ -21,7 +22,7 @@ def notebook_list_create(request):
     POST: Creates a new notebook and associates it with the authenticated user.
     """
     if request.method == 'GET':
-        connectors = NotebookUserConnector.objects.filter(user=request.user)
+        connectors = NotebookUserConnector.objects.filter(user=request.user).order_by('-last_opened')
         serializer = NotebookUserConnectorSerializer(connectors, many=True)
         return Response(serializer.data)
     elif request.method == 'POST':
@@ -59,6 +60,10 @@ def notebook_detail(request, notebook_id):
         return Response({'error': 'Notebook not found'}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == 'GET':
+        # Update last_opened timestamp
+        connector.last_opened = timezone.now()
+        connector.save()
+
         serializer = NotebookSerializer(notebook)
         return Response(serializer.data)
     elif request.method == 'PUT':
@@ -81,11 +86,15 @@ def block_list_create(request, notebook_id):
     POST: Creates a new block and associates it with the notebook.
     """
     try:
-        NotebookUserConnector.objects.get(user=request.user, notebook_id=notebook_id)
+        connector = NotebookUserConnector.objects.get(user=request.user, notebook_id=notebook_id)
     except NotebookUserConnector.DoesNotExist:
         return Response({'error': 'Notebook not found'}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == 'GET':
+        # Update last_opened timestamp
+        connector.last_opened = timezone.now()
+        connector.save()
+
         connectors = BlockNotebookConnector.objects.filter(notebook_id=notebook_id)
         serializer = BlockNotebookConnectorSerializer(connectors, many=True)
         return Response(serializer.data)

@@ -15,7 +15,7 @@ export default function NotebookPage() {
   const params = useParams();
   const router = useRouter();
   const notebookId = params.id as string;
-  const { getNotebookById } = useMainView();
+  const { getNotebookById, updateNotebookConnectorInStore } = useMainView();
 
   const currentNotebook = getNotebookById(notebookId);
   const notebookName = currentNotebook?.notebook.name || '';
@@ -75,6 +75,9 @@ export default function NotebookPage() {
           blocksMap.set(block.id, block.clone());
         });
         setPreviousBlocks(blocksMap);
+
+        // Update last_opened in local store
+        updateNotebookConnectorInStore(notebookId, { last_opened: new Date().toISOString() });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load notebook');
       } finally {

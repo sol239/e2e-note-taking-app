@@ -28,7 +28,7 @@ class NotebookUserConnectorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = NotebookUserConnector
-        fields = ['notebook']
+        fields = ['notebook', 'last_opened']
 
 class BlockNotebookConnectorSerializer(serializers.ModelSerializer):
     block = BlockSerializer()

@@ -12,6 +12,7 @@ class Notebook(models.Model):
 class NotebookUserConnector(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     notebook = models.ForeignKey(Notebook, on_delete=models.CASCADE)
+    last_opened = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ('user', 'notebook')

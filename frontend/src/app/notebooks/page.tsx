@@ -200,9 +200,13 @@ export default function NotebooksPage() {
           }}
         >
           <div className="flex gap-4 min-w-min">
-            {notebooks.slice(0, 10).map((connector) => (
+            {notebooks
+              .filter(n => n.last_opened)
+              .sort((a, b) => new Date(b.last_opened!).getTime() - new Date(a.last_opened!).getTime())
+              .slice(0, 10)
+              .map((connector) => (
               <Link
-                key={connector.id}
+                key={connector.notebook.id}
                 href={`/notebooks/${connector.notebook.id}`}
                 className="group bg-gray-50 hover:bg-gray-100 rounded-xl p-4 transition-all duration-200 border border-transparent hover:border-gray-200 block flex-shrink-0 w-64"
               >
@@ -216,7 +220,7 @@ export default function NotebooksPage() {
                       <div className="w-4 h-4 rounded bg-gray-300 flex items-center justify-center text-[10px] text-white font-bold">
                         {user?.nickname ? user.nickname[0].toUpperCase() : 'U'}
                       </div>
-                      <span>2m ago</span>
+                      <span>{connector.last_opened ? new Date(connector.last_opened).toLocaleDateString() : ''}</span>
                     </div>
                   </div>
                 </div>

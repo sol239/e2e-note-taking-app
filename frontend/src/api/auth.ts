@@ -26,9 +26,8 @@ export interface Notebook {
 }
 
 export interface NotebookConnector {
-  id: number;
-  user: number;
   notebook: Notebook;
+  last_opened?: string;
 }
 
 export interface Block {

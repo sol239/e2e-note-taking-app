@@ -9,6 +9,7 @@ interface MainViewContextType {
   notebooks: NotebookConnector[];
   fetchNotebooks: () => Promise<void>;
   updateNotebookInStore: (notebookId: string, updates: Partial<Notebook>) => void;
+  updateNotebookConnectorInStore: (notebookId: string, updates: Partial<NotebookConnector>) => void;
   getNotebookById: (notebookId: string) => NotebookConnector | undefined;
 }
 
@@ -34,6 +35,16 @@ export const MainViewProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       prevNotebooks.map(connector => 
         connector.notebook.id === notebookId 
           ? { ...connector, notebook: { ...connector.notebook, ...updates } }
+          : connector
+      )
+    );
+  };
+
+  const updateNotebookConnectorInStore = (notebookId: string, updates: Partial<NotebookConnector>) => {
+    setNotebooks(prevNotebooks => 
+      prevNotebooks.map(connector => 
+        connector.notebook.id === notebookId 
+          ? { ...connector, ...updates }
           : connector
       )
     );
@@ -71,6 +82,7 @@ export const MainViewProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       notebooks, 
       fetchNotebooks, 
       updateNotebookInStore,
+      updateNotebookConnectorInStore,
       getNotebookById 
     }}>
       {children}
