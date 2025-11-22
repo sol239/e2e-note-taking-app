@@ -13,7 +13,16 @@ export interface RegisterRequest {
 }
 
 export interface AuthResponse {
-  token: string;
+  token?: string;
+  tfa_required?: boolean;
+  temp_token?: string;
+}
+
+export interface TFASetupResponse {
+  secret: string;
+  qr: string;
+  uri: string;
+  recovery_keys: string[];
 }
 
 export interface ErrorResponse {
@@ -49,6 +58,7 @@ export interface User {
   first_name: string;
   last_name: string;
   nickname: string;
+  totp_enabled: boolean;
 }
 
 export async function getUser(): Promise<User> {
@@ -420,4 +430,70 @@ export async function importNotebook(file: File): Promise<Notebook> {
   const data = await response.json();
   FrontendHub.logResponse(url, response.status, data);
   return data;
+}
+
+export async function tfaSetup(): Promise<TFASetupResponse> {
+  const token = localStorage.getItem('authToken');
+  const url = `${API_BASE_URL}/tfa/setup/`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!response.ok) throw new Error('TFA setup failed');
+  return response.json();
+}
+
+export async function tfaEnable(code: string): Promise<void> {
+  const token = localStorage.getItem('authToken');
+  const url = `${API_BASE_URL}/tfa/enable/`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ code }),
+  });
+  if (!response.ok) throw new Error('TFA enable failed');
+}
+
+export async function tfaVerify(temp_token: string, code: string): Promise<AuthResponse> {
+  const url = `${API_BASE_URL}/tfa/verify/`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ temp_token, code }),
+  });
+  if (!response.ok) throw new Error('TFA verify failed');
+  return response.json();
+}
+
+export async function tfaDisable(): Promise<void> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    throw new Error('No auth token found');
+  }
+
+  const url = `${API_BASE_URL}/tfa/disable/`;
+  FrontendHub.logRequest(url, 'POST');
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    FrontendHub.logError(url, `Status: ${response.status}`);
+    throw new Error('Failed to disable TFA');
+  }
+
+  FrontendHub.logResponse(url, response.status, {});
 }

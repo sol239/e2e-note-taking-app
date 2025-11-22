@@ -31,6 +31,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)
 
+    totp_secret = models.CharField(max_length=64, blank=True, null=True)
+    totp_enabled = models.BooleanField(default=False)
+    recovery_keys = models.TextField(blank=True, null=True) # Stored as JSON list
+
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 

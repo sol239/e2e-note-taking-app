@@ -6,6 +6,14 @@ from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
 from accounts.models import User
 from .serializers import UserSerializer, UpdateUserSerializer
+import pyotp
+import base64
+import qrcode
+import io
+import json
+import random
+import string
+from django.core.cache import cache
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -60,7 +68,121 @@ def login_view(request):
     password = request.data.get('password')
     user = authenticate(request, username=email, password=password)
     if user is not None:
+        if user.totp_enabled:
+            temp_token = pyotp.random_base32()
+            cache.set(f"tfa_{temp_token}", user.id, timeout=300) # 5 minutes
+            return Response({
+                "tfa_required": True,
+                "temp_token": temp_token
+            })
+
         token, created = Token.objects.get_or_create(user=user)
-        return Response({'token': token.key})
+        return Response({'token': token.key, 'tfa_required': False})
     else:
         return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def tfa_setup(request):
+    user = request.user
+    secret = pyotp.random_base32()
+    user.totp_secret = secret
+    
+    # Generate recovery keys
+    recovery_keys = [''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) for _ in range(5)]
+    user.recovery_keys = json.dumps(recovery_keys)
+    
+    user.save()
+
+    totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
+        name=user.email,
+        issuer_name="E2E Notes App"
+    )
+
+    qr_buffer = io.BytesIO()
+    qrcode.make(totp_uri).save(qr_buffer, format='PNG')
+    qr_base64 = base64.b64encode(qr_buffer.getvalue()).decode()
+
+    return Response({
+        "secret": secret,
+        "qr": qr_base64,
+        "uri": totp_uri,
+        "recovery_keys": recovery_keys
+    })
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def tfa_enable(request):
+    user = request.user
+    code = request.data.get("code")
+
+    if not user.totp_secret:
+        return Response({"error": "TFA not initialized"}, status=400)
+
+    totp = pyotp.TOTP(user.totp_secret)
+
+    if totp.verify(code):
+        user.totp_enabled = True
+        user.save()
+        return Response({"status": "TFA enabled"})
+    else:
+        return Response({"error": "Invalid code"}, status=400)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def tfa_disable(request):
+    user = request.user
+    user.totp_enabled = False
+    user.totp_secret = None
+    user.recovery_keys = None
+    user.save()
+    return Response({"status": "TFA disabled"})
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def tfa_verify(request):
+    temp_token = request.data.get("temp_token")
+    code = request.data.get("code")
+
+    user_id = cache.get(f"tfa_{temp_token}")
+
+    if not user_id:
+        return Response({"error": "Session expired or invalid"}, status=400)
+
+    user = User.objects.get(id=user_id)
+    
+    # Check if code is a recovery key
+    recovery_keys = []
+    if user.recovery_keys:
+        try:
+            recovery_keys = json.loads(user.recovery_keys)
+        except:
+            pass
+            
+    if code in recovery_keys:
+        # Recovery key used
+        user.totp_enabled = False
+        user.totp_secret = None
+        user.recovery_keys = None
+        user.save()
+        
+        cache.delete(f"tfa_{temp_token}")
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({
+            "token": token.key,
+            "tfa_required": False,
+            "message": "Recovery key used. 2FA has been disabled."
+        })
+
+    totp = pyotp.TOTP(user.totp_secret)
+
+    if not totp.verify(code, valid_window=1):
+        return Response({"error": "Invalid TOTP"}, status=400)
+
+    cache.delete(f"tfa_{temp_token}")
+    token, _ = Token.objects.get_or_create(user=user)
+
+    return Response({
+        "token": token.key,
+        "tfa_required": False
+    })

@@ -3,13 +3,18 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { login } from '../../api/auth';
+import { login, tfaVerify } from '../../api/auth';
+import OTPInput from '../../components/OTPInput';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [step, setStep] = useState<'login' | 'tfa'>('login');
+  const [tempToken, setTempToken] = useState('');
+  const [tfaCode, setTfaCode] = useState('');
+  const [useRecoveryKey, setUseRecoveryKey] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -18,10 +23,22 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await login({ email, password });
-      // Store the token (you might want to use a more secure method in production)
-      localStorage.setItem('authToken', response.token);
-      router.push('/notebooks'); // Redirect to notebooks page after successful login
+      if (step === 'login') {
+        const response = await login({ email, password });
+        if (response.tfa_required && response.temp_token) {
+          setTempToken(response.temp_token);
+          setStep('tfa');
+        } else if (response.token) {
+          localStorage.setItem('authToken', response.token);
+          router.push('/notebooks'); // Redirect to notebooks page after successful login
+        }
+      } else {
+        const response = await tfaVerify(tempToken, tfaCode);
+        if (response.token) {
+          localStorage.setItem('authToken', response.token);
+          router.push('/notebooks');
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -69,42 +86,84 @@ export default function LoginPage() {
                 {error}
               </div>
             )}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-black mb-2">
-                Email Address
-              </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 text-gray-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                placeholder="Enter your email"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-black mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 text-gray-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                placeholder="Enter your password"
-              />
-            </div>
+            {step === 'login' ? (
+              <>
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-black mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-3 text-gray-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="Enter your email"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-black mb-2">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-3 text-gray-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="Enter your password"
+                  />
+                </div>
+              </>
+            ) : (
+              <div>
+                <label htmlFor="tfaCode" className="block text-sm font-medium text-black mb-4 text-center">
+                  {useRecoveryKey ? 'Enter Recovery Key' : 'Two-Factor Authentication Code'}
+                </label>
+                
+                {!useRecoveryKey ? (
+                    <OTPInput
+                      value={tfaCode}
+                      onChange={setTfaCode}
+                      disabled={isLoading}
+                    />
+                ) : (
+                    <div className="mb-4">
+                        <input
+                            type="text"
+                            value={tfaCode}
+                            onChange={(e) => setTfaCode(e.target.value)}
+                            className="w-full px-4 py-3 text-gray-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-center font-mono"
+                            placeholder="Enter your recovery key"
+                            disabled={isLoading}
+                        />
+                    </div>
+                )}
+
+                <div className="text-center mt-4 mb-2">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setUseRecoveryKey(!useRecoveryKey);
+                            setTfaCode('');
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-800 underline"
+                    >
+                        {useRecoveryKey ? 'Use Authenticator App' : 'Use Recovery Key'}
+                    </button>
+                </div>
+              </div>
+            )}
             <button
               type="submit"
               disabled={isLoading}
               className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading ? 'Loading...' : step === 'login' ? 'Sign In' : 'Verify Code'}
             </button>
           </form>
           <div className="mt-6 text-center">
