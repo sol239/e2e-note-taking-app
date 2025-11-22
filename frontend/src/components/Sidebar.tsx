@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -15,7 +15,8 @@ import {
   HelpCircle,
   Sparkles,
   Calendar,
-  ChevronDown
+  ChevronDown,
+  LogOut
 } from 'lucide-react';
 import { getNotebooks, NotebookConnector, createNotebook, deleteNotebook, getUser, User } from '../api/auth';
 import { useMainView } from '../contexts/MainViewContext';
@@ -28,12 +29,30 @@ export default function Sidebar() {
   const [creating, setCreating] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { view, setView, notebooks, fetchNotebooks } = useMainView();
 
   useEffect(() => {
     fetchUser();
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    if (userMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [userMenuOpen]);
 
   const fetchUser = async () => {
     try {
@@ -63,15 +82,42 @@ export default function Sidebar() {
     n.notebook.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    router.push('/login');
+  };
+
   return (
     <div className="w-64 bg-gray-50 border-r border-gray-200 h-screen flex flex-col text-gray-700">
       {/* User / Workspace Switcher */}
-      <div className="p-3 hover:bg-gray-200 cursor-pointer transition-colors m-2 rounded-md flex items-center gap-2">
-        <div className="w-5 h-5 bg-gradient-to-r from-blue-600 to-purple-600 rounded text-white flex items-center justify-center text-xs font-bold">
-          {user?.nickname ? user.nickname[0].toUpperCase() : 'U'}
+      <div className="relative" ref={userMenuRef}>
+        <div 
+          className="p-3 hover:bg-gray-200 cursor-pointer transition-colors m-2 rounded-md flex items-center gap-2"
+          onClick={() => setUserMenuOpen(!userMenuOpen)}
+        >
+          <div className="w-5 h-5 bg-gradient-to-r from-blue-600 to-purple-600 rounded text-white flex items-center justify-center text-xs font-bold">
+            {user?.nickname ? user.nickname[0].toUpperCase() : 'U'}
+          </div>
+          <span className="text-sm font-medium truncate">{user?.nickname ? `${user.nickname}'s Notebooks` : 'User\'s Notebooks'}</span>
+          <ChevronDown className={`w-4 h-4 text-gray-400 ml-auto transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
         </div>
-        <span className="text-sm font-medium truncate">{user?.nickname ? `${user.nickname}'s Notebooks` : 'User\'s Notebooks'}</span>
-        <ChevronDown className="w-4 h-4 text-gray-400 ml-auto" />
+
+        {/* User Menu Popover */}
+        {userMenuOpen && (
+          <div className="absolute top-full left-2 right-2 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100">
+              <p className="text-xs text-gray-500">Signed in as</p>
+              <p className="text-sm font-medium text-gray-900 truncate">{user?.email}</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Log out</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Search & Main Nav */}
