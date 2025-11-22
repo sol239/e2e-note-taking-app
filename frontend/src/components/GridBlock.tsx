@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Block, BlockType } from '@/models/Block';
+import { Image, Video, Volume2, Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, Code, Quote, Sigma } from 'lucide-react';
+import NextImage from 'next/image';
 
 interface GridCellData {
   blockId?: string; // ID of the block placed in this cell
@@ -108,16 +110,19 @@ export const GridBlock: React.FC<GridBlockProps> = ({
   };
 
   const blockTypes = [
-    { type: BlockType.PARAGRAPH, label: 'Paragraph', icon: '¶' },
-    { type: BlockType.HEADING1, label: 'Heading 1', icon: 'H1' },
-    { type: BlockType.HEADING2, label: 'Heading 2', icon: 'H2' },
-    { type: BlockType.HEADING3, label: 'Heading 3', icon: 'H3' },
-    { type: BlockType.BULLETED_LIST, label: 'Bulleted List', icon: '•' },
-    { type: BlockType.NUMBERED_LIST, label: 'Numbered List', icon: '1.' },
-    { type: BlockType.TODO, label: 'To-do', icon: '☐' },
-    { type: BlockType.CODE, label: 'Code', icon: '</>' },
-    { type: BlockType.QUOTE, label: 'Quote', icon: '"' },
-    { type: BlockType.MATH, label: 'Math', icon: '∑' },
+    { type: BlockType.PARAGRAPH, label: 'Paragraph', icon: <Type className="w-4 h-4" /> },
+    { type: BlockType.HEADING1, label: 'Heading 1', icon: <Heading1 className="w-4 h-4" /> },
+    { type: BlockType.HEADING2, label: 'Heading 2', icon: <Heading2 className="w-4 h-4" /> },
+    { type: BlockType.HEADING3, label: 'Heading 3', icon: <Heading3 className="w-4 h-4" /> },
+    { type: BlockType.BULLETED_LIST, label: 'Bulleted List', icon: <List className="w-4 h-4" /> },
+    { type: BlockType.NUMBERED_LIST, label: 'Numbered List', icon: <ListOrdered className="w-4 h-4" /> },
+    { type: BlockType.TODO, label: 'To-do', icon: <CheckSquare className="w-4 h-4" /> },
+    { type: BlockType.CODE, label: 'Code', icon: <Code className="w-4 h-4" /> },
+    { type: BlockType.QUOTE, label: 'Quote', icon: <Quote className="w-4 h-4" /> },
+    { type: BlockType.MATH, label: 'Math', icon: <Sigma className="w-4 h-4" /> },
+    { type: BlockType.IMAGE, label: 'Image', icon: <Image className="w-4 h-4" /> },
+    { type: BlockType.VIDEO, label: 'Video', icon: <Video className="w-4 h-4" /> },
+    { type: BlockType.AUDIO, label: 'Audio', icon: <Volume2 className="w-4 h-4" /> },
   ];
 
   return (
@@ -199,11 +204,14 @@ export const GridBlock: React.FC<GridBlockProps> = ({
           Array.from({ length: cols }, (_, colIndex) => {
             const cellKey = getCellKey(rowIndex, colIndex);
             const cellData = cells[cellKey];
-            const hasBlock = cellData?.blockId;
+            const cellContent = cellData?.blockId;
             const isDragOver = dragOverCell === cellKey;
             
-            // Find the actual block if it exists
-            const cellBlock = hasBlock ? allBlocks.find(b => b.id === cellData.blockId) : null;
+            // Check if it's a URL (for demo images)
+            const isImageUrl = cellContent && cellContent.startsWith('/');
+            // Find the actual block if it's a block ID
+            const cellBlock = cellContent && !isImageUrl ? allBlocks.find(b => b.id === cellContent) : null;
+            const hasContent = cellContent && (cellBlock || isImageUrl);
 
             return (
               <div
@@ -217,7 +225,7 @@ export const GridBlock: React.FC<GridBlockProps> = ({
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, cellKey)}
               >
-                {hasBlock && cellBlock ? (
+                {hasContent ? (
                   <div className="space-y-1">
                     <div className="flex items-center justify-end pb-1">
                       <button
@@ -231,26 +239,34 @@ export const GridBlock: React.FC<GridBlockProps> = ({
                         ✕
                       </button>
                     </div>
-                    <BlockComponentRenderer
-                      block={cellBlock}
-                      allBlocks={allBlocks}
-                      onUpdate={onUpdateBlock}
-                      onDelete={() => {
-                        onCellRemove(cellKey);
-                        onDeleteBlock(cellBlock.id);
-                      }}
-                      onAddBelow={() => {}} // Disabled in grid
-                      onAddAbove={() => {}} // Disabled in grid
-                      onFocus={onFocusBlock}
-                      onMoveUp={() => {}} // Disabled in grid
-                      onMoveDown={() => {}} // Disabled in grid
-                      onCreateBlock={(blockType: BlockType) => {
-                        // Create block and return its ID, but grid doesn't use it
-                        const newBlockId = `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                        return newBlockId;
-                      }}
-                      isActive={activeBlockId === cellBlock.id}
-                    />
+                    {isImageUrl ? (
+                      <img
+                        src={cellContent}
+                        alt="Demo image"
+                        className="w-full h-auto rounded"
+                      />
+                    ) : cellBlock ? (
+                      <BlockComponentRenderer
+                        block={cellBlock}
+                        allBlocks={allBlocks}
+                        onUpdate={onUpdateBlock}
+                        onDelete={() => {
+                          onCellRemove(cellKey);
+                          onDeleteBlock(cellBlock.id);
+                        }}
+                        onAddBelow={() => {}} // Disabled in grid
+                        onAddAbove={() => {}} // Disabled in grid
+                        onFocus={onFocusBlock}
+                        onMoveUp={() => {}} // Disabled in grid
+                        onMoveDown={() => {}} // Disabled in grid
+                        onCreateBlock={() => {
+                          // Create block and return its ID, but grid doesn't use it
+                          const newBlockId = `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                          return newBlockId;
+                        }}
+                        isActive={activeBlockId === cellBlock.id}
+                      />
+                    ) : null}
                   </div>
                 ) : (
                   <div className="relative h-full flex items-center justify-center">

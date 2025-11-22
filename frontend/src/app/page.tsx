@@ -1,194 +1,153 @@
-'use client';
+﻿"use client";
 
-import dynamic from 'next/dynamic';
-import { useState } from 'react';
-import { GlobalSettingsProvider } from '@/contexts/GlobalSettingsContext';
-import { GlobalSettingsPanel } from '@/components/GlobalSettingsPanel';
-import { Block, BlockType } from '@/models/Block';
-import { Settings } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-const NoteEditor = dynamic(() => import('@/components/NoteEditor'), { ssr: false });
+export default function LandingPage() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const router = useRouter();
 
-export default function Home() {
-  const [showGlobalSettings, setShowGlobalSettings] = useState(false);
-  const [initialBlocks, setInitialBlocks] = useState<Block[] | undefined>(undefined);
-  const [key, setKey] = useState(0);
-  const [title, setTitle] = useState('Untitled');
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-
-  const createDemoNote = () => {
-    const demoBlocks: Block[] = [
-      new Block('demo-1', BlockType.HEADING1, 'Welcome to the Demo Note! 🎉'),
-      new Block('demo-2', BlockType.PARAGRAPH, 'This demo showcases all available block types in this note-taking application. Try editing, dragging, or using Ctrl+Click to add new blocks!'),
-      
-      new Block('demo-3', BlockType.HEADING2, 'Headings'),
-      new Block('demo-4', BlockType.HEADING1, 'Heading 1 - Largest'),
-      new Block('demo-5', BlockType.HEADING2, 'Heading 2 - Large'),
-      new Block('demo-6', BlockType.HEADING3, 'Heading 3 - Medium'),
-      
-      new Block('demo-7', BlockType.HEADING2, 'Text Formatting'),
-      new Block('demo-8', BlockType.PARAGRAPH, 'Regular paragraph with **bold text**, *italic text*, and __underlined text__. You can also use Ctrl+B, Ctrl+I, and Ctrl+U for formatting!'),
-      
-      new Block('demo-9', BlockType.HEADING2, 'Lists'),
-      new Block('demo-10', BlockType.BULLETED_LIST, 'First bullet point'),
-      new Block('demo-11', BlockType.BULLETED_LIST, 'Second bullet point'),
-      new Block('demo-12', BlockType.BULLETED_LIST, 'Third bullet point with **bold** formatting'),
-      
-      new Block('demo-13', BlockType.NUMBERED_LIST, 'First numbered item'),
-      new Block('demo-14', BlockType.NUMBERED_LIST, 'Second numbered item'),
-      new Block('demo-15', BlockType.NUMBERED_LIST, 'Third numbered item'),
-      
-      new Block('demo-16', BlockType.HEADING2, 'Todo Lists'),
-      new Block('demo-17', BlockType.TODO, 'Unchecked todo item', { checked: false }),
-      new Block('demo-18', BlockType.TODO, 'Checked todo item', { checked: true }),
-      new Block('demo-19', BlockType.TODO, 'Another task to complete', { checked: false }),
-      
-      new Block('demo-20', BlockType.HEADING2, 'Code Blocks'),
-      new Block('demo-21', BlockType.PARAGRAPH, 'Click the language selector in the code block header to change syntax highlighting:'),
-      new Block('demo-22', BlockType.CODE, 
-`function fibonacci(n) {
-  if (n <= 1) return n;
-  return fibonacci(n - 1) + fibonacci(n - 2);
-}
-
-console.log(fibonacci(10));`, { language: 'javascript' }),
-      
-      new Block('demo-23', BlockType.CODE, 
-`def quicksort(arr):
-    if len(arr) <= 1:
-        return arr
-    pivot = arr[len(arr) // 2]
-    left = [x for x in arr if x < pivot]
-    middle = [x for x in arr if x == pivot]
-    right = [x for x in arr if x > pivot]
-    return quicksort(left) + middle + quicksort(right)
-
-print(quicksort([3,6,8,10,1,2,1]))`, { language: 'python' }),
-      
-      new Block('demo-24', BlockType.HEADING2, 'Quotes'),
-      new Block('demo-25', BlockType.QUOTE, 'The only way to do great work is to love what you do. - Steve Jobs'),
-      new Block('demo-26', BlockType.QUOTE, 'Innovation distinguishes between a leader and a follower.'),
-      
-      new Block('demo-27', BlockType.HEADING2, 'Math Equations'),
-      new Block('demo-28', BlockType.PARAGRAPH, 'LaTeX math equations are rendered beautifully:'),
-      new Block('demo-29', BlockType.MATH, 'E = mc^2'),
-      new Block('demo-30', BlockType.MATH, '\\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}'),
-      new Block('demo-31', BlockType.MATH, '\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}'),
-      
-      new Block('demo-32', BlockType.HEADING2, 'Grid Layouts'),
-      new Block('demo-33', BlockType.PARAGRAPH, 'Create organized layouts with grid blocks. Click the "+" in empty cells to add content:'),
-      
-      // Grid content blocks
-      new Block('demo-grid-1', BlockType.HEADING3, 'Project Overview'),
-      new Block('demo-grid-2', BlockType.PARAGRAPH, 'This is a sample grid layout showing how you can organize content in a structured way.'),
-      new Block('demo-grid-3', BlockType.TODO, 'Complete project setup', { checked: true }),
-      new Block('demo-grid-4', BlockType.CODE, 'console.log("Hello from grid!");', { language: 'javascript' }),
-      
-      new Block('demo-34', BlockType.GRID, '', {
-        gridRows: 2,
-        gridCols: 3,
-        gridCells: {
-          '0-0': ['demo-grid-1'],
-          '0-1': ['demo-grid-2'],
-          '1-0': ['demo-grid-3'],
-          '1-2': ['demo-grid-4']
-        }
-      }),
-      
-      new Block('demo-35', BlockType.HEADING2, 'Dividers'),
-      new Block('demo-36', BlockType.PARAGRAPH, 'Use dividers to separate sections:'),
-      new Block('demo-37', BlockType.DIVIDER, ''),
-      
-      new Block('demo-38', BlockType.HEADING2, 'Tips & Shortcuts'),
-      new Block('demo-39', BlockType.BULLETED_LIST, 'Type "/" in an empty block to see all block types'),
-      new Block('demo-40', BlockType.BULLETED_LIST, 'Ctrl+Click on a block to create a new one below'),
-      new Block('demo-41', BlockType.BULLETED_LIST, 'Ctrl+Shift+Click to create a new block above'),
-      new Block('demo-42', BlockType.BULLETED_LIST, 'Drag the ⋮⋮ handle to reorder blocks'),
-      new Block('demo-43', BlockType.BULLETED_LIST, 'Press Enter to create a new block below'),
-      new Block('demo-44', BlockType.BULLETED_LIST, 'Backspace in an empty block to delete it'),
-      new Block('demo-45', BlockType.BULLETED_LIST, 'Ctrl+Arrow keys to move blocks up/down'),
-      
-      new Block('demo-46', BlockType.DIVIDER, ''),
-      new Block('demo-47', BlockType.PARAGRAPH, 'Happy note-taking! 📝'),
-    ];
-
-    setInitialBlocks(demoBlocks);
-    setKey(prev => prev + 1); // Force re-render of NoteEditor
-  };
-
-  const handleTitleClick = () => {
-    setIsEditingTitle(true);
-  };
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTitle(e.target.value);
-  };
-
-  const handleTitleBlur = () => {
-    setIsEditingTitle(false);
-  };
-
-  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      setIsEditingTitle(false);
-    } else if (e.key === 'Escape') {
-      setIsEditingTitle(false);
-    }
-  };
+  useEffect(() => {
+    // Check if user is logged in
+    const token = localStorage.getItem('authToken');
+    setIsLoggedIn(!!token);
+  }, []);
 
   return (
-    <GlobalSettingsProvider>
-      <div className="min-h-screen bg-white">
-        <div className="mx-auto max-w-5xl">
-          <div className="border-b border-gray-200 px-8 py-6 flex justify-between items-center">
-            {isEditingTitle ? (
-              <input
-                type="text"
-                value={title}
-                onChange={handleTitleChange}
-                onBlur={handleTitleBlur}
-                onKeyDown={handleTitleKeyDown}
-                className="text-2xl font-semibold text-gray-900 bg-transparent border-none outline-none focus:ring-0"
-                autoFocus
-                onFocus={(e) => e.target.select()}
-              />
-            ) : (
-              <h1 
-                className="text-2xl font-semibold text-gray-900 cursor-text hover:bg-gray-100 px-2 py-1 rounded transition-colors"
-                onClick={handleTitleClick}
-                title="Click to edit title"
-              >
-                {title || 'Untitled'}
-              </h1>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={createDemoNote}
-                className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
-                title="Create a demo note with all block types"
-              >
-                📋 Create Demo Note
-              </button>
-              <button
-                onClick={() => setShowGlobalSettings(true)}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-50 flex items-center gap-2"
-                title="Global Settings"
-              >
-                <Settings className="w-4 h-4" />
-                Settings
-              </button>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      {/* Navigation */}
+      <nav className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">N</span>
+              </div>
+              <span className="text-xl font-bold text-gray-900">Notes</span>
             </div>
           </div>
-          <div className="px-8">
-            <NoteEditor key={key} initialBlocks={initialBlocks} />
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto text-center">
+          <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6">
+            Your Ideas,
+            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"> Encrypted</span>
+          </h1>
+          <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
+            Take notes with end-to-end encryption. Create, organize, and secure your thoughts with our modern note-taking platform.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            {isLoggedIn ? (
+              <Link
+                href="/notebooks"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
+              >
+                Open Your Notebooks
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-lg text-lg font-semibold hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/register"
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
         </div>
-      </div>
+      </section>
 
-      <GlobalSettingsPanel
-        isOpen={showGlobalSettings}
-        onClose={() => setShowGlobalSettings(false)}
-      />
-    </GlobalSettingsProvider>
+      {/* Features Section */}
+      <section className="py-20 bg-white/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Why Choose Notes?
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Experience the future of secure note-taking with our comprehensive feature set.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="bg-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">End-to-End Encryption</h3>
+              <p className="text-gray-600">Your notes are encrypted on your device and stay secure in transit.</p>
+            </div>
+
+            <div className="bg-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200">
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Rich Content Blocks</h3>
+              <p className="text-gray-600">Create notes with text, code, images, videos, and more in a flexible block-based editor.</p>
+            </div>
+
+            <div className="bg-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200">
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Organize & Collaborate</h3>
+              <p className="text-gray-600">Keep your notes organized in notebooks and share securely with your team.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600">
+        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+            Ready to Secure Your Thoughts?
+          </h2>
+          <p className="text-xl text-blue-100 mb-8">
+            Join thousands of users who trust Notes with their most important ideas.
+          </p>
+          <Link
+            href="/register"
+            className="bg-white text-blue-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-50 transition-all duration-200 transform hover:scale-105 inline-block"
+          >
+            Create Your Account
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="flex items-center space-x-2 mb-4 md:mb-0">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">N</span>
+              </div>
+              <span className="text-xl font-bold">Notes</span>
+            </div>
+            <div className="text-gray-400 text-sm">
+               2025 Notes. Your notes, your privacy.
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }

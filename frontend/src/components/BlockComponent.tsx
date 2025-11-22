@@ -1,33 +1,42 @@
 'use client';
 
-import React, { useState, useRef, useEffect, KeyboardEvent, DragEvent } from 'react';
-import { Block, BlockType } from '@/models/Block';
+import React, { useState, useRef, useEffect, KeyboardEvent, DragEvent, useCallback } from 'react';
+import { Block, BlockType, IBlock } from '@/models/Block';
 import TextFormattingToolbar from './TextFormattingToolbar';
 import { BlockSettingsPanel } from './BlockSettingsPanel';
 import { CodeBlockRenderer } from './CodeBlockRenderer';
 import { LiveCodeEditor } from './LiveCodeEditor';
 import { GridBlock } from './GridBlock';
+import ImageBlock from './ImageBlock';
+import VideoBlock from './VideoBlock';
+import AudioBlock from './AudioBlock';
+import NotebookLinkBlock from './NotebookLinkBlock';
 import { BlockStyling } from '@/models/Settings';
+import { Image, Video, Volume2, Trash2, BookOpen } from 'lucide-react';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { Settings } from 'lucide-react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
+import WYSIWYGEditor, { WYSIWYGEditorRef } from './WYSIWYGEditor';
 
 interface BlockComponentProps {
   block: Block;
   allBlocks: Block[];
   onUpdate: (id: string, updates: Partial<Block>) => void;
   onDelete: (id: string) => void;
-  onAddBelow: (id: string) => void;
+  onAddBelow: (id: string, type?: BlockType) => void;
   onAddAbove: (id: string) => void;
   onFocus: (id: string) => void;
   onMoveUp: (id: string) => void;
   onMoveDown: (id: string) => void;
   onDragStart?: (id: string) => void;
   onDragOver?: (id: string) => void;
-  onDrop?: (targetId: string) => void;
+  onDrop?: (targetId: string, position?: 'left' | 'right' | 'top' | 'bottom') => void;
   onCreateBlock: (blockType: BlockType) => string;
   isActive: boolean;
+  isDeletable?: boolean;
+  isDraggable?: boolean;
+  canAddAbove?: boolean;
 }
 
 const BlockComponent: React.FC<BlockComponentProps> = ({
@@ -45,6 +54,9 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   onDrop,
   onCreateBlock,
   isActive,
+  isDeletable = true,
+  isDraggable = true,
+  canAddAbove = true,
 }) => {
   const { settings: globalSettings } = useGlobalSettings();
   const [showMenu, setShowMenu] = useState(false);
@@ -57,19 +69,71 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isMathEditing, setIsMathEditing] = useState(false);
-  const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0 });
+  const [initialSize, setInitialSize] = useState({ width: 0, height: 0 });
+  const [toolbarPosition, setToolbarPosition] = useState<{ top: number; left: number } | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement | WYSIWYGEditorRef>(null);
   const firstMenuItemRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const [dropPosition, setDropPosition] = useState<'left' | 'right' | 'top' | 'bottom' | null>(null);
+
+  useEffect(() => {
+    // Keep local content state in sync if parent updates block.content
+    if (block.content !== content) {
+      setContent(block.content);
+    }
+  }, [block.content]);
+
+  
   useEffect(() => {
     if (isActive && inputRef.current) {
       inputRef.current.focus();
     }
   }, [isActive]);
 
+  // Ensure height adjusts when the block becomes active
   useEffect(() => {
-    setContent(block.content);
-  }, [block.content]);
+    const el = inputRef.current;
+    if (!isActive || !el || !(el instanceof HTMLTextAreaElement)) return;
+    // Adjust after paint
+    const id = requestAnimationFrame(() => {
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [isActive]);
+
+  // Robust auto-resize for textarea (runs after layout and listens for input/resize)
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || !(el instanceof HTMLTextAreaElement)) return;
+
+    const adjustHeight = () => {
+      // Reset height to auto so scrollHeight becomes accurate, then set to scrollHeight
+      // Ensure box-sizing is border-box so height calculation includes padding
+      el.style.boxSizing = 'border-box';
+      el.style.height = 'auto';
+      const newHeight = el.scrollHeight;
+      // Only set if positive and changed
+      if (newHeight && el.style.height !== `${newHeight}px`) {
+        el.style.height = `${newHeight}px`;
+      }
+    };
+
+    // Use requestAnimationFrame to ensure measurement happens after paint/layout
+    const rafId = requestAnimationFrame(adjustHeight);
+    // Add event listeners to handle typing and window resize
+    el.addEventListener('input', adjustHeight);
+    window.addEventListener('resize', adjustHeight);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      el.removeEventListener('input', adjustHeight);
+      window.removeEventListener('resize', adjustHeight);
+    };
+  }, [content, block.type]);
 
   // Focus on first menu item when menu opens
   useEffect(() => {
@@ -163,13 +227,22 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       } else {
         // Regular Enter creates new block below
         e.preventDefault();
-        onAddBelow(block.id);
+        // If current block is BULLETED_LIST, create another BULLETED_LIST
+        if (block.type === BlockType.BULLETED_LIST) {
+          onAddBelow(block.id, BlockType.BULLETED_LIST);
+        } else if (block.type === BlockType.NUMBERED_LIST) {
+          onAddBelow(block.id, BlockType.NUMBERED_LIST);
+        } else {
+          onAddBelow(block.id);
+        }
       }
     } else if (e.key === 'Enter' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
       // Ctrl+Shift+Enter creates new block above
       e.preventDefault();
-      onAddAbove(block.id);
-    } else if (e.key === 'Backspace' && content === '' && !e.shiftKey) {
+      if (canAddAbove) {
+        onAddAbove(block.id);
+      }
+    } else if (e.key === 'Backspace' && content === '' && !e.shiftKey && isDeletable) {
       e.preventDefault();
       onDelete(block.id);
     } else if (e.key === 'ArrowUp' && e.ctrlKey) {
@@ -198,6 +271,23 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setIsDragOver(true);
+    
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const width = rect.width;
+    const height = rect.height;
+    
+    if (x < width * 0.2) {
+      setDropPosition('left');
+    } else if (x > width * 0.8) {
+      setDropPosition('right');
+    } else if (y < height * 0.5) {
+      setDropPosition('top');
+    } else {
+      setDropPosition('bottom');
+    }
+
     if (onDragOver) {
       onDragOver(block.id);
     }
@@ -205,13 +295,28 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
 
   const handleDragLeave = () => {
     setIsDragOver(false);
+    setDropPosition(null);
   };
 
   const handleDrop = (e: DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    setDropPosition(null);
     if (onDrop) {
-      onDrop(block.id);
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const width = rect.width;
+      const height = rect.height;
+      
+      let position: 'left' | 'right' | 'top' | 'bottom' | undefined = undefined;
+      
+      if (x < width * 0.2) position = 'left';
+      else if (x > width * 0.8) position = 'right';
+      else if (y < height * 0.5) position = 'top';
+      else position = 'bottom';
+      
+      onDrop(block.id, position);
     }
   };
 
@@ -220,7 +325,9 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       e.preventDefault();
       if (e.shiftKey) {
         // Ctrl+Shift+Click creates block above
-        onAddAbove(block.id);
+        if (canAddAbove) {
+          onAddAbove(block.id);
+        }
       } else {
         // Ctrl+Click creates block below
         onAddBelow(block.id);
@@ -228,48 +335,107 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
     }
   };
 
-  const applyFormatting = (format: string) => {
-    const textarea = inputRef.current as HTMLTextAreaElement;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = content.substring(start, end);
-    let formattedText = '';
-
-    switch (format) {
-      case 'bold':
-        formattedText = `**${selectedText || 'bold text'}**`;
-        break;
-      case 'italic':
-        formattedText = `*${selectedText || 'italic text'}*`;
-        break;
-      case 'underline':
-        formattedText = `<u>${selectedText || 'underlined text'}</u>`;
-        break;
-      case 'strikethrough':
-        formattedText = `~~${selectedText || 'strikethrough'}~~`;
-        break;
-      case 'code':
-        formattedText = `\`${selectedText || 'code'}\``;
-        break;
-      case 'link':
-        formattedText = `[${selectedText || 'link text'}](url)`;
-        break;
-      default:
-        return;
+  const handleTextMouseUp = (e: React.MouseEvent) => {
+    const target = e.target as HTMLTextAreaElement;
+    if (target.selectionStart !== target.selectionEnd) {
+      // Position toolbar above the mouse cursor
+      // We use fixed positioning, so clientX/Y works
+      setToolbarPosition({ 
+        top: e.clientY - 50, // 50px above cursor
+        left: e.clientX 
+      });
+      setShowFormatting(true);
+    } else {
+      setShowFormatting(false);
     }
-
-    const newContent =
-      content.substring(0, start) + formattedText + content.substring(end);
-    setContent(newContent);
-    onUpdate(block.id, { content: newContent });
   };
 
+  const handleTextKeyUp = (e: React.KeyboardEvent) => {
+    const target = e.target as HTMLTextAreaElement;
+    if (target.selectionStart !== target.selectionEnd) {
+      // For keyboard selection, we don't have mouse coordinates.
+      // We'll position it relative to the textarea itself as a fallback
+      const rect = target.getBoundingClientRect();
+      setToolbarPosition({ 
+        top: rect.top - 40, 
+        left: rect.left + (rect.width / 2) 
+      });
+      setShowFormatting(true);
+    } else {
+      setShowFormatting(false);
+    }
+  };
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    setResizeStart({ x: e.clientX, y: e.clientY });
+    
+    const element = e.currentTarget.parentElement?.querySelector('img, iframe');
+    if (element) {
+      const rect = element.getBoundingClientRect();
+      setInitialSize({ width: rect.width, height: rect.height });
+    }
+  };
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return;
+    
+    const deltaX = e.clientX - resizeStart.x;
+    const deltaY = e.clientY - resizeStart.y;
+    
+    const newWidth = Math.max(100, initialSize.width + deltaX);
+    const newHeight = Math.max(100, initialSize.height + deltaY);
+    
+    onUpdate(block.id, {
+      metadata: {
+        ...block.metadata,
+        width: newWidth,
+        height: newHeight
+      } as IBlock['metadata']
+    });
+  }, [isResizing, resizeStart, initialSize, block.id, block.metadata, onUpdate]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleResizeMove);
+      document.addEventListener('mouseup', handleResizeEnd);
+      return () => {
+        document.removeEventListener('mousemove', handleResizeMove);
+        document.removeEventListener('mouseup', handleResizeEnd);
+      };
+    }
+  }, [isResizing, handleResizeMove, handleResizeEnd]);
+
   const handleChange = (value: string) => {
+    // Auto-formatting: Check for "- " at start
+    if (value.startsWith('- ') && block.type === BlockType.PARAGRAPH) {
+      // Remove the "- " prefix
+      const cleanText = value.substring(2);
+      // Update block type to BULLETED_LIST
+      onUpdate(block.id, { type: BlockType.BULLETED_LIST, content: cleanText });
+      setContent(cleanText);
+      return;
+    }
+
+    // Auto-formatting: Check for "1. " or "N. " at start
+    const numberedListMatch = value.match(/^(\d+)\.\s/);
+    if (numberedListMatch && block.type === BlockType.PARAGRAPH) {
+      // Remove the "N. " prefix
+      const cleanText = value.substring(numberedListMatch[0].length);
+      // Update block type to NUMBERED_LIST
+      onUpdate(block.id, { type: BlockType.NUMBERED_LIST, content: cleanText });
+      setContent(cleanText);
+      return;
+    }
+
     // Apply active formats to new text
     let newText = value;
-    const lastChar = value.slice(-1);
     const prevContent = content;
     
     // Only apply formatting to newly typed characters
@@ -296,6 +462,37 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   };
 
   const toggleFormatMode = (format: string) => {
+    // Check if we are using WYSIWYGEditor
+    if (inputRef.current && 'toggleFormat' in inputRef.current) {
+      (inputRef.current as WYSIWYGEditorRef).toggleFormat(format);
+      return;
+    }
+
+    // If text is selected, apply formatting immediately
+    if (inputRef.current && inputRef.current instanceof HTMLTextAreaElement) {
+      const start = inputRef.current.selectionStart;
+      const end = inputRef.current.selectionEnd;
+
+      if (start !== end) {
+        const text = content.slice(start, end);
+        let prefix = '';
+        let suffix = '';
+
+        if (format === 'bold') { prefix = '**'; suffix = '**'; }
+        else if (format === 'italic') { prefix = '*'; suffix = '*'; }
+        else if (format === 'underline') { prefix = '<u>'; suffix = '</u>'; }
+        else if (format === 'strikethrough') { prefix = '~~'; suffix = '~~'; }
+
+        const newText = content.slice(0, start) + prefix + text + suffix + content.slice(end);
+        setContent(newText);
+        onUpdate(block.id, { content: newText });
+        
+        // Hide toolbar after applying
+        setShowFormatting(false);
+        return;
+      }
+    }
+
     setActiveFormats(prev => {
       const newFormats = new Set(prev);
       if (newFormats.has(format)) {
@@ -362,20 +559,28 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
     }
   };
 
-  const renderMarkdown = (text: string) => {
-    let html = text;
-    // Bold
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // Italic
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    // Strikethrough
-    html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
-    // Inline code
-    html = html.replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 rounded text-sm">$1</code>');
-    // Links
-    html = html.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-blue-600 underline">$1</a>');
-    
-    return html;
+  // Basic inline markdown-like renderer for paragraph preview
+  const renderInlineFormattingHTML = (raw: string | undefined) => {
+    if (!raw) return '';
+
+    // Escape HTML to be safe, then selectively allow a couple of tags (u)
+    const escapeHtml = (s: string) =>
+      s.replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    let out = escapeHtml(raw);
+
+    // Allow <u> and </u> (toggleFormatMode inserts <u> tags). We only allow exact tags.
+    out = out.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, '<u>$1</u>');
+
+    // Convert bold/italic/strikethrough markers
+    // Bold first to avoid clobbering the italic markers inside
+    out = out.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/~~(.*?)~~/g, '<del>$1</del>');
+    out = out.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    return out;
   };
 
   const getBlockIcon = () => {
@@ -395,17 +600,21 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       case BlockType.CODE:
         return <span>{'</>'}</span>;
       case BlockType.QUOTE:
-        return <span>"</span>;
+        return <span>&quot;</span>;
       case BlockType.MATH:
         return <span>∑</span>;
       case BlockType.DIVIDER:
         return <span>—</span>;
       case BlockType.IMAGE:
-        return <span>🖼️</span>;
+        return <Image className="w-4 h-4" />;
       case BlockType.VIDEO:
-        return <span>🎥</span>;
+        return <Video className="w-4 h-4" />;
+      case BlockType.AUDIO:
+        return <Volume2 className="w-4 h-4" />;
       case BlockType.GRID:
         return <span>📊</span>;
+      case BlockType.NOTEBOOK_LINK:
+        return <BookOpen className="w-4 h-4" />;
       default:
         return <span>¶</span>;
     }
@@ -437,15 +646,19 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
         return 'Image';
       case BlockType.VIDEO:
         return 'Video';
+      case BlockType.AUDIO:
+        return 'Audio';
       case BlockType.GRID:
         return 'Grid Layout';
+      case BlockType.NOTEBOOK_LINK:
+        return 'Notebook Link';
       default:
         return 'Paragraph';
     }
   };
 
   const renderInput = () => {
-    const baseClasses = 'w-full bg-transparent border-none outline-none resize-none text-black';
+    const baseClasses = 'w-full bg-transparent border-none outline-none resize-none overflow-hidden text-inherit';
     const cellMarginStyle = {
       marginBottom: `${globalSettings.cellMarginBottom}px`
     };
@@ -460,27 +673,12 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       
       case BlockType.IMAGE:
         return (
-          <div className="space-y-2" style={cellMarginStyle}>
-            <input
-              ref={inputRef as React.RefObject<HTMLInputElement>}
-              type="text"
-              value={block.metadata?.url || ''}
-              onChange={(e) => onUpdate(block.id, { 
-                metadata: { ...block.metadata, url: e.target.value } 
-              })}
-              onKeyDown={handleKeyDown}
-              onFocus={() => onFocus(block.id)}
-              placeholder="Image URL"
-              className={`${baseClasses} text-sm`}
-            />
-            {block.metadata?.url && (
-              <img 
-                src={block.metadata.url} 
-                alt={block.metadata?.alt || 'Image'} 
-                className="max-w-full rounded-lg"
-              />
-            )}
-          </div>
+          <ImageBlock
+            block={block}
+            onUpdate={onUpdate}
+            cellMarginStyle={cellMarginStyle}
+            onResizeStart={handleResizeStart}
+          />
         );
       
       case BlockType.GRID:
@@ -509,6 +707,17 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
               }}
               onCellDrop={(cellKey: string, blockId: string) => {
                 const updatedGridCells = { ...block.metadata?.gridCells };
+                
+                // Remove the block from any existing cell in this grid
+                Object.keys(updatedGridCells).forEach(existingCellKey => {
+                  updatedGridCells[existingCellKey] = updatedGridCells[existingCellKey].filter(id => id !== blockId);
+                  // Remove empty cells
+                  if (updatedGridCells[existingCellKey].length === 0) {
+                    delete updatedGridCells[existingCellKey];
+                  }
+                });
+                
+                // Add the block to the new cell
                 updatedGridCells[cellKey] = [blockId];
                 onUpdate(block.id, {
                   metadata: { ...block.metadata, gridCells: updatedGridCells }
@@ -543,29 +752,32 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
 
       case BlockType.VIDEO:
         return (
-          <div className="space-y-2" style={cellMarginStyle}>
-            <input
-              ref={inputRef as React.RefObject<HTMLInputElement>}
-              type="text"
-              value={block.metadata?.url || ''}
-              onChange={(e) => onUpdate(block.id, { 
-                metadata: { ...block.metadata, url: e.target.value } 
-              })}
-              onKeyDown={handleKeyDown}
-              onFocus={() => onFocus(block.id)}
-              placeholder="Video URL (YouTube, Vimeo, etc.)"
-              className={`${baseClasses} text-sm`}
-            />
-            {block.metadata?.url && (
-              <div className="aspect-video">
-                <iframe
-                  src={block.metadata.url}
-                  className="w-full h-full rounded-lg"
-                  allowFullScreen
-                />
-              </div>
-            )}
-          </div>
+          <VideoBlock
+            block={block}
+            onUpdate={onUpdate}
+            onFocus={onFocus}
+            cellMarginStyle={cellMarginStyle}
+            onResizeStart={handleResizeStart}
+          />
+        );
+
+      case BlockType.AUDIO:
+        return (
+          <AudioBlock
+            block={block}
+            onUpdate={onUpdate}
+            onFocus={onFocus}
+            cellMarginStyle={cellMarginStyle}
+          />
+        );
+
+      case BlockType.NOTEBOOK_LINK:
+        return (
+          <NotebookLinkBlock
+            block={block}
+            onUpdate={onUpdate}
+            cellMarginStyle={cellMarginStyle}
+          />
         );
 
       case BlockType.HEADING1:
@@ -577,9 +789,10 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             onKeyDown={handleKeyDown}
             onFocus={() => {
               onFocus(block.id);
-              setShowFormatting(true);
             }}
             onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+            onMouseUp={handleTextMouseUp}
+            onKeyUp={handleTextKeyUp}
             placeholder="Heading 1"
             className={`${baseClasses} text-4xl font-bold py-2`}
             style={{ marginBottom: `${globalSettings.headingMargins.h1}px` }}
@@ -595,9 +808,10 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             onKeyDown={handleKeyDown}
             onFocus={() => {
               onFocus(block.id);
-              setShowFormatting(true);
             }}
             onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+            onMouseUp={handleTextMouseUp}
+            onKeyUp={handleTextKeyUp}
             placeholder="Heading 2"
             className={`${baseClasses} text-3xl font-bold py-2`}
             style={{ marginBottom: `${globalSettings.headingMargins.h2}px` }}
@@ -613,9 +827,10 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             onKeyDown={handleKeyDown}
             onFocus={() => {
               onFocus(block.id);
-              setShowFormatting(true);
             }}
             onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+            onMouseUp={handleTextMouseUp}
+            onKeyUp={handleTextKeyUp}
             placeholder="Heading 3"
             className={`${baseClasses} text-2xl font-bold py-2`}
             style={{ marginBottom: `${globalSettings.headingMargins.h3}px` }}
@@ -661,13 +876,14 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             onKeyDown={handleKeyDown}
             onFocus={() => {
               onFocus(block.id);
-              setShowFormatting(true);
             }}
             onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+            onMouseUp={handleTextMouseUp}
+            onKeyUp={handleTextKeyUp}
             placeholder="Quote"
-            className={`${baseClasses} border-l-4 border-gray-300 pl-4 italic text-gray-700`}
+            className={`${baseClasses} border-l-4 border-gray-300 pl-4 italic`}
             style={cellMarginStyle}
-            rows={Math.max(1, content.split('\n').length)}
+            rows={1}
           />
         );
       case BlockType.MATH:
@@ -685,7 +901,7 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
                 }}
                 placeholder="LaTeX math equation (e.g., E = mc^2)"
                 className={`${baseClasses} font-mono text-sm`}
-                rows={Math.max(1, content.split('\n').length)}
+                rows={1}
                 autoFocus
               />
             ) : (
@@ -696,21 +912,15 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
                   setTimeout(() => {
                     if (inputRef.current) {
                       inputRef.current.focus();
-                      inputRef.current.select();
+                      if ('select' in inputRef.current) {
+                        (inputRef.current as HTMLTextAreaElement | HTMLInputElement).select();
+                      }
                     }
                   }, 0);
                 }}
                 dangerouslySetInnerHTML={{ __html: content ? renderMath(content) : '<span class="text-gray-400 italic">Double-click to add LaTeX equation</span>' }}
               />
             )}
-            <style dangerouslySetInnerHTML={{__html: `
-              .katex-container .katex {
-                color: #000000 !important;
-              }
-              .katex-container .katex * {
-                color: #000000 !important;
-              }
-            `}} />
           </div>
         );
       case BlockType.TODO:
@@ -733,21 +943,22 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
               onKeyDown={handleKeyDown}
               onFocus={() => {
                 onFocus(block.id);
-                setShowFormatting(true);
               }}
               onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+              onMouseUp={handleTextMouseUp}
+              onKeyUp={handleTextKeyUp}
               placeholder="To-do"
               className={`${baseClasses} flex-1 ${
                 block.metadata?.checked ? 'line-through text-gray-500' : ''
               }`}
-              rows={Math.max(1, content.split('\n').length)}
+              rows={1}
             />
           </div>
         );
       case BlockType.BULLETED_LIST:
         return (
           <div className="flex items-start gap-2" style={cellMarginStyle}>
-            <span className="text-xl mt-0.5 text-black">•</span>
+            <span className="text-xl mt-0.5">•</span>
             <textarea
               ref={inputRef as React.RefObject<HTMLTextAreaElement>}
               value={content}
@@ -755,19 +966,33 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
               onKeyDown={handleKeyDown}
               onFocus={() => {
                 onFocus(block.id);
-                setShowFormatting(true);
               }}
               onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+              onMouseUp={handleTextMouseUp}
+              onKeyUp={handleTextKeyUp}
               placeholder="List"
               className={`${baseClasses} flex-1`}
-              rows={Math.max(1, content.split('\n').length)}
+              rows={1}
             />
           </div>
         );
       case BlockType.NUMBERED_LIST:
+        // Calculate the number based on preceding numbered list blocks
+        let listNumber = 1;
+        const currentBlockIndex = allBlocks.findIndex(b => b.id === block.id);
+        if (currentBlockIndex > 0) {
+          for (let i = currentBlockIndex - 1; i >= 0; i--) {
+            if (allBlocks[i].type === BlockType.NUMBERED_LIST) {
+              listNumber++;
+            } else {
+              break;
+            }
+          }
+        }
+
         return (
           <div className="flex items-start gap-2" style={cellMarginStyle}>
-            <span className="mt-0.5 text-black">1.</span>
+            <span className="mt-0.5">{listNumber}.</span>
             <textarea
               ref={inputRef as React.RefObject<HTMLTextAreaElement>}
               value={content}
@@ -775,77 +1000,109 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
               onKeyDown={handleKeyDown}
               onFocus={() => {
                 onFocus(block.id);
-                setShowFormatting(true);
               }}
               onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+              onMouseUp={handleTextMouseUp}
+              onKeyUp={handleTextKeyUp}
               placeholder="List"
               className={`${baseClasses} flex-1`}
-              rows={Math.max(1, content.split('\n').length)}
+              rows={1}
             />
           </div>
         );
       default:
-        return (
-          <textarea
-            ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-            value={content}
-            onChange={(e) => handleChange(e.target.value)}
+        return isActive ? (
+          <WYSIWYGEditor
+            ref={inputRef as React.RefObject<WYSIWYGEditorRef>}
+            content={content}
+            onChange={handleChange}
             onKeyDown={handleKeyDown}
-            onFocus={() => {
-              onFocus(block.id);
-              setShowFormatting(true);
-            }}
+            onFocus={() => onFocus(block.id)}
             onBlur={() => setTimeout(() => setShowFormatting(false), 200)}
+            onMouseUp={handleTextMouseUp}
+            onKeyUp={handleTextKeyUp}
             placeholder="Type '/' for commands"
             className={`${baseClasses} text-base`}
             style={cellMarginStyle}
-            rows={Math.max(1, content.split('\n').length)}
+          />
+        ) : (
+          <div
+            className={`${baseClasses} text-base cursor-text whitespace-pre-wrap`}
+            style={cellMarginStyle}
+            onClick={() => onFocus(block.id)}
+            // Render HTML content directly
+            dangerouslySetInnerHTML={{ __html: content || '<span class="text-gray-400 italic">Type \'/\' for commands</span>' }}
           />
         );
     }
   };
 
+  const getDragOverClass = () => {
+    if (!isDragOver || !dropPosition) return '';
+    switch (dropPosition) {
+      case 'top': return 'border-t-4 border-blue-500';
+      case 'bottom': return 'border-b-4 border-blue-500';
+      case 'left': return 'border-l-4 border-blue-500';
+      case 'right': return 'border-r-4 border-blue-500';
+      default: return '';
+    }
+  };
+
   return (
     <div 
-      className={`relative group ${isDragging ? 'opacity-50' : ''} ${isDragOver ? 'border-t-2 border-blue-500' : ''}`}
+      className={`relative group ${isDragging ? 'opacity-50' : ''} ${getDragOverClass()}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <div className="flex items-start gap-1">
-        {/* Drag handle button on the left */}
-        <button
-          draggable
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onClick={(e) => {
-            if (e.ctrlKey || e.metaKey) {
-              e.preventDefault();
-              e.stopPropagation();
-              if (e.shiftKey) {
-                // Ctrl+Shift+Click creates cell above
-                onAddAbove(block.id);
-              } else {
-                // Ctrl+Click creates cell below
-                onAddBelow(block.id);
+        <div className="flex items-center gap-1">
+          {/* Drag handle button on the left */}
+          <button
+            draggable={isDraggable}
+            onDragStart={isDraggable ? handleDragStart : undefined}
+            onDragEnd={isDraggable ? handleDragEnd : undefined}
+            onClick={(e) => {
+              if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.shiftKey) {
+                  // Ctrl+Shift+Click creates cell above
+                  if (canAddAbove) {
+                    onAddAbove(block.id);
+                  }
+                } else {
+                  // Ctrl+Click creates cell below
+                  onAddBelow(block.id);
+                }
               }
-            }
-          }}
-          className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 flex-shrink-0 cursor-grab active:cursor-grabbing"
-          title="Drag to reorder | Ctrl+Click: add below | Ctrl+Shift+Click: add above"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <circle cx="6" cy="5" r="1.5" />
-            <circle cx="14" cy="5" r="1.5" />
-            <circle cx="6" cy="10" r="1.5" />
-            <circle cx="14" cy="10" r="1.5" />
-            <circle cx="6" cy="15" r="1.5" />
-            <circle cx="14" cy="15" r="1.5" />
-          </svg>
-        </button>
+            }}
+            className={`opacity-0 group-hover:opacity-100 transition-opacity mt-2 p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 flex-shrink-0 ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
+            title={`Drag to reorder | Ctrl+Click: add below${canAddAbove ? ' | Ctrl+Shift+Click: add above' : ''}`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <circle cx="6" cy="5" r="1.5" />
+              <circle cx="14" cy="5" r="1.5" />
+              <circle cx="6" cy="10" r="1.5" />
+              <circle cx="14" cy="10" r="1.5" />
+              <circle cx="6" cy="15" r="1.5" />
+              <circle cx="14" cy="15" r="1.5" />
+            </svg>
+          </button>
+          {/* Delete block button */}
+          {isDeletable && (
+            <button
+              onClick={() => onDelete(block.id)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-red-600 flex-shrink-0"
+              title="Delete block"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
 
         <div
-          className={`pt-0 pb-1 px-2 rounded transition-colors flex-1 ${
+          className={`pt-0 pb-1 px-2 rounded transition-colors flex-1 text-black ${
             isActive ? '' : ''
           }`}
           style={getBlockContainerStyle()}
@@ -917,9 +1174,12 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
         )}
         </div>
 
-        {/* Formatting Toolbar - below the cell border */}
-        {isActive && showFormatting && ![BlockType.CODE, BlockType.DIVIDER, BlockType.IMAGE, BlockType.VIDEO, BlockType.MATH].includes(block.type) && (
-          <div className="mt-1 mr-8 flex justify-end">
+        {/* Floating Formatting Toolbar */}
+        {isActive && showFormatting && toolbarPosition && ![BlockType.CODE, BlockType.DIVIDER, BlockType.IMAGE, BlockType.VIDEO, BlockType.AUDIO, BlockType.MATH, BlockType.GRID, BlockType.NOTEBOOK_LINK].includes(block.type) && (
+          <div 
+            className="fixed z-50"
+            style={{ top: toolbarPosition.top, left: toolbarPosition.left }}
+          >
             <TextFormattingToolbar 
               onFormat={toggleFormatMode} 
               show={true} 

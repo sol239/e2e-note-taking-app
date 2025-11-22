@@ -13,7 +13,9 @@ export enum BlockType {
   DIVIDER = 'divider',
   IMAGE = 'image',
   VIDEO = 'video',
+  AUDIO = 'audio',
   GRID = 'grid',
+  NOTEBOOK_LINK = 'notebook_link',
 }
 
 export interface IBlock {
@@ -25,9 +27,15 @@ export interface IBlock {
     checked?: boolean; // For todo items
     url?: string; // For images and videos
     alt?: string; // For images
+    filename?: string; // For uploaded images
+    uploaded?: boolean; // For uploaded images
+    width?: number; // For resizable images and videos
+    height?: number; // For resizable images and videos
     gridRows?: number; // For grid blocks
     gridCols?: number; // For grid blocks
     gridCells?: Record<string, string[]>; // For grid blocks - cell key to block IDs
+    notebookId?: string; // For notebook link blocks
+    notebookName?: string; // For notebook link blocks
   };
   settings?: {
     styling?: {
@@ -41,6 +49,8 @@ export interface IBlock {
       padding?: number;
     };
   };
+  position_id?: number;
+  position_order?: number;
 }
 
 export class Block implements IBlock {
@@ -52,9 +62,13 @@ export class Block implements IBlock {
     checked?: boolean;
     url?: string;
     alt?: string;
+    filename?: string;
+    uploaded?: boolean;
     gridRows?: number;
     gridCols?: number;
     gridCells?: Record<string, string[]>;
+    notebookId?: string;
+    notebookName?: string;
   };
   settings?: {
     styling?: {
@@ -68,6 +82,8 @@ export class Block implements IBlock {
       padding?: number;
     };
   };
+  position_id?: number;
+  position_order?: number;
 
   constructor(
     id: string,
@@ -78,9 +94,13 @@ export class Block implements IBlock {
       checked?: boolean;
       url?: string;
       alt?: string;
+      filename?: string;
+      uploaded?: boolean;
       gridRows?: number;
       gridCols?: number;
       gridCells?: Record<string, string[]>;
+      notebookId?: string;
+      notebookName?: string;
     },
     settings?: {
       styling?: {
@@ -93,17 +113,21 @@ export class Block implements IBlock {
         borderRadius?: number;
         padding?: number;
       };
-    }
+    },
+    position_id: number = 0,
+    position_order: number = 0
   ) {
     this.id = id;
     this.type = type;
     this.content = content;
     this.metadata = metadata;
     this.settings = settings;
+    this.position_id = position_id;
+    this.position_order = position_order;
   }
 
   clone(): Block {
-    return new Block(this.id, this.type, this.content, { ...this.metadata }, this.settings);
+    return new Block(this.id, this.type, this.content, { ...this.metadata }, this.settings, this.position_id, this.position_order);
   }
 
   isEmpty(): boolean {

@@ -1,3 +1,5 @@
+'use client';
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { GlobalSettings, defaultGlobalSettings } from '../models/Settings';
 
@@ -20,7 +22,7 @@ export const GlobalSettingsProvider: React.FC<{ children: ReactNode }> = ({ chil
       if (stored) {
         try {
           return { ...defaultGlobalSettings, ...JSON.parse(stored) };
-        } catch (error) {
+        } catch {
           console.warn('Failed to parse stored settings, using defaults');
         }
       }
