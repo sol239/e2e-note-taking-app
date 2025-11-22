@@ -194,6 +194,14 @@ class SyncWorker {
     try {
       await updateNotebook(notebookId, name);
       console.log('Notebook name synced:', name);
+      
+      // Dispatch custom event to update global store
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('notebook-updated', { 
+          detail: { notebookId, updates: { name } } 
+        }));
+      }
+      
       onStatusChange?.('synced');
     } catch (error) {
       console.error('Failed to sync notebook name:', error);

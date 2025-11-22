@@ -3,19 +3,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getNotebookBlocks, getNotebooks } from '../../../api/auth';
+import { getNotebookBlocks } from '../../../api/auth';
 import NoteEditor from '../../../components/NoteEditor';
 import { Block, BlockType } from '../../../models/Block';
 import { Check, X, Loader2, Download, Database } from 'lucide-react';
 import SyncWorker from '../../../utils/SyncWorker';
 import ExportModal from '../../../components/ExportModal';
+import { useMainView } from '../../../contexts/MainViewContext';
 
 export default function NotebookPage() {
   const params = useParams();
   const router = useRouter();
   const notebookId = params.id as string;
+  const { getNotebookById } = useMainView();
 
-  const [notebookName, setNotebookName] = useState('');
+  const currentNotebook = getNotebookById(notebookId);
+  const notebookName = currentNotebook?.notebook.name || '';
+
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,13 +38,10 @@ export default function NotebookPage() {
   useEffect(() => {
     const fetchNotebookData = async () => {
       try {
-        // Get notebook name
-        const notebooks = await getNotebooks();
-        const notebook = notebooks.find(n => n.notebook.id === notebookId);
-        if (!notebook) {
+        // Check if notebook exists
+        if (!currentNotebook) {
           throw new Error('Notebook not found');
         }
-        setNotebookName(notebook.notebook.name);
 
         // Get blocks
         const blockConnectors = await getNotebookBlocks(notebookId);
@@ -124,8 +125,7 @@ export default function NotebookPage() {
     if (newBlocks.length > 0 && newBlocks[0].type === BlockType.HEADING1) {
       const firstBlockContent = newBlocks[0].content;
       if (firstBlockContent !== notebookName) {
-        // Update notebook name to match first heading (with delay)
-        setNotebookName(firstBlockContent);
+        // Queue notebook name sync (global store will be updated via event)
         queueNotebookNameSync(firstBlockContent);
       }
     }

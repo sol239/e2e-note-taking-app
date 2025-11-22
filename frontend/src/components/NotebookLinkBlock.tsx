@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Block } from '@/models/Block';
-import { getNotebooks, createNotebook, NotebookConnector } from '@/api/auth';
+import { createNotebook, NotebookConnector } from '@/api/auth';
 import { BookOpen, Search, ExternalLink, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useMainView } from '@/contexts/MainViewContext';
 
 interface NotebookLinkBlockProps {
   block: Block;
@@ -15,35 +16,21 @@ interface NotebookLinkBlockProps {
 
 const NotebookLinkBlock: React.FC<NotebookLinkBlockProps> = ({ block, onUpdate, cellMarginStyle }) => {
   const [showNotebookSearch, setShowNotebookSearch] = useState(false);
-  const [notebooks, setNotebooks] = useState<NotebookConnector[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const { notebooks, fetchNotebooks } = useMainView();
 
   useEffect(() => {
     if (showNotebookSearch) {
-      loadNotebooks();
       // Focus search input when modal opens
       setTimeout(() => {
         searchInputRef.current?.focus();
       }, 100);
     }
   }, [showNotebookSearch]);
-
-  const loadNotebooks = async () => {
-    setLoading(true);
-    try {
-      const data = await getNotebooks();
-      setNotebooks(data);
-    } catch (error) {
-      console.error('Failed to load notebooks:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getFilteredNotebooks = () => {
     if (!searchQuery.trim()) return notebooks;
@@ -68,6 +55,9 @@ const NotebookLinkBlock: React.FC<NotebookLinkBlockProps> = ({ block, onUpdate, 
     setCreating(true);
     try {
       const newNotebook = await createNotebook('New Notebook');
+      
+      // Refresh notebooks in global store
+      await fetchNotebooks();
       
       // Link the newly created notebook to this block
       onUpdate(block.id, {
@@ -111,6 +101,13 @@ const NotebookLinkBlock: React.FC<NotebookLinkBlockProps> = ({ block, onUpdate, 
 
   const hasNotebookLinked = block.metadata?.notebookId && block.metadata?.notebookName;
 
+  // Get current notebook name from global store (in case it was updated elsewhere)
+  const getCurrentNotebookName = () => {
+    if (!block.metadata?.notebookId) return block.metadata?.notebookName || '';
+    const currentNotebook = notebooks.find(n => n.notebook.id === block.metadata?.notebookId);
+    return currentNotebook?.notebook.name || block.metadata?.notebookName || '';
+  };
+
   return (
     <div style={cellMarginStyle} className="py-2">
       {!hasNotebookLinked ? (
@@ -132,7 +129,7 @@ const NotebookLinkBlock: React.FC<NotebookLinkBlockProps> = ({ block, onUpdate, 
             </div>
             <div>
               <p className="text-sm text-gray-500">Linked Notebook</p>
-              <p className="text-base font-semibold text-gray-900">{block.metadata?.notebookName}</p>
+              <p className="text-base font-semibold text-gray-900">{getCurrentNotebookName()}</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
