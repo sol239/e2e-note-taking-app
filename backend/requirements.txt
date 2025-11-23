@@ -5,3 +5,6 @@ drf-spectacular
 django-cors-headers
 argon2-cffi
 gunicorn
+pyotp
+qrcode
+pillow

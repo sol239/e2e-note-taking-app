@@ -1,15 +1,30 @@
 "use client";
 
+/* 1. Imports */
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Trash2, FileText, Clock, Upload, Lock } from 'lucide-react';
 import { getNotebooks, createNotebook, deleteNotebook, NotebookConnector, getUser, User, importNotebook } from '../../api/auth';
-import { Trash2, FileText, Clock, ChevronRight, Upload } from 'lucide-react';
-import SyncWorker from '../../utils/SyncWorker';
 import { useMainView } from '../../contexts/MainViewContext';
+import UnlockModal from '../../components/UnlockModal';
+
+/* 2. External Stores */
+// None
 
 export default function NotebooksPage() {
-  const { notebooks, fetchNotebooks: contextFetchNotebooks } = useMainView();
+  /* 3. Next.js Hooks */
+  const router = useRouter();
+  const { notebooks, fetchNotebooks: contextFetchNotebooks, hasMasterKey } = useMainView();
+
+  /* 4. Constants */
+  // None
+
+  /* 5. Refs */
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  /* 6. State */
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
@@ -19,16 +34,18 @@ export default function NotebooksPage() {
   const [deleting, setDeleting] = useState(false);
   const [greeting, setGreeting] = useState('Good morning');
   const [user, setUser] = useState<User | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
+  /* 7. Derived/Computed */
+  // None
+
+  /* 8. Effects */
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting('Good morning');
     else if (hour < 18) setGreeting('Good afternoon');
     else setGreeting('Good evening');
 
-    // redirect to login if not authenticated
     if (typeof window !== 'undefined' && !localStorage.getItem('authToken')) {
       router.push('/login');
       return;
@@ -37,8 +54,7 @@ export default function NotebooksPage() {
     fetchUser();
   }, []);
 
-  const router = useRouter();
-
+  /* 9. Methods */
   const fetchUser = async () => {
     try {
       const userData = await getUser();
@@ -122,6 +138,13 @@ export default function NotebooksPage() {
     }
   };
 
+  /* 10. Expose (like defineExpose) */
+  // None
+
+  /* 11. Render Helpers (optional) */
+  // None
+
+  /* 12. JSX Template */
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -149,7 +172,8 @@ export default function NotebooksPage() {
       <div className="mb-6 flex gap-3">
         <button
           onClick={handleCreateNotebook}
-          disabled={creating}
+          disabled={creating || !hasMasterKey}
+          title={!hasMasterKey ? "Unlock to create notebook" : ""}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {creating ? (
@@ -162,7 +186,8 @@ export default function NotebooksPage() {
 
         <button
           onClick={handleImportClick}
-          disabled={importing}
+          disabled={importing || !hasMasterKey}
+          title={!hasMasterKey ? "Unlock to import notebook" : ""}
           className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {importing ? (
@@ -204,28 +229,50 @@ export default function NotebooksPage() {
               .filter(n => n.last_opened)
               .sort((a, b) => new Date(b.last_opened!).getTime() - new Date(a.last_opened!).getTime())
               .slice(0, 10)
-              .map((connector) => (
-              <Link
-                key={connector.notebook.id}
-                href={`/notebooks/${connector.notebook.id}`}
-                className="group bg-gray-50 hover:bg-gray-100 rounded-xl p-4 transition-all duration-200 border border-transparent hover:border-gray-200 block flex-shrink-0 w-64"
-              >
-                <div className="flex flex-col h-24 justify-between">
-                  <div className="w-8 h-8 rounded bg-white border border-gray-200 flex items-center justify-center text-gray-400 group-hover:text-gray-600">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900 truncate mb-1">{connector.notebook.name}</h3>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <div className="w-4 h-4 rounded bg-gray-300 flex items-center justify-center text-[10px] text-white font-bold">
-                        {user?.nickname ? user.nickname[0].toUpperCase() : 'U'}
+              .map((connector) => {
+                const isLocked = !hasMasterKey;
+                const notebookName = isLocked ? '••••••••' : connector.notebook.name;
+                
+                const Content = () => (
+                  <div className="flex flex-col h-24 justify-between">
+                    <div className="w-8 h-8 rounded bg-white border border-gray-200 flex items-center justify-center text-gray-400 group-hover:text-gray-600">
+                      {isLocked ? <Lock className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-gray-900 truncate mb-1">{notebookName}</h3>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <div className="w-4 h-4 rounded bg-gray-300 flex items-center justify-center text-[10px] text-white font-bold">
+                          {user?.nickname ? user.nickname[0].toUpperCase() : 'U'}
+                        </div>
+                        <span>{connector.last_opened ? new Date(connector.last_opened).toLocaleDateString() : ''}</span>
                       </div>
-                      <span>{connector.last_opened ? new Date(connector.last_opened).toLocaleDateString() : ''}</span>
                     </div>
                   </div>
-                </div>
-              </Link>
-            ))}
+                );
+
+                if (isLocked) {
+                  return (
+                    <div
+                      key={connector.notebook.id}
+                      onClick={() => setShowUnlockModal(true)}
+                      className="group bg-gray-50 rounded-xl p-4 border border-transparent block flex-shrink-0 w-64 cursor-pointer opacity-70 hover:bg-gray-100"
+                      title="Master key required to access"
+                    >
+                      <Content />
+                    </div>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={connector.notebook.id}
+                    href={`/notebooks/${connector.notebook.id}`}
+                    className="group bg-gray-50 hover:bg-gray-100 rounded-xl p-4 transition-all duration-200 border border-transparent hover:border-gray-200 block flex-shrink-0 w-64"
+                  >
+                    <Content />
+                  </Link>
+                );
+              })}
           </div>
         </div>
       </div>
@@ -264,6 +311,12 @@ export default function NotebooksPage() {
           </div>
         </div>
       )}
+
+      {/* Unlock Modal */}
+      <UnlockModal 
+        isOpen={showUnlockModal} 
+        onClose={() => setShowUnlockModal(false)} 
+      />
     </div>
   );
 }

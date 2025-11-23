@@ -1,14 +1,34 @@
+/**
+ * DocumentManager - Manages the collection of blocks in a notebook.
+ * 
+ * Provides CRUD operations for blocks with automatic change notifications.
+ * Ensures at least one block always exists in the document.
+ */
+
 import { Block, IBlock, BlockType } from './Block';
 
-// Document Manager - manages the collection of blocks
+/**
+ * Interface defining document management operations.
+ */
 export interface IDocumentManager {
+  /** Get all blocks in the document */
   getBlocks(): Block[];
+  /** Add a new block at the specified index */
   addBlock(block: Block, index?: number): void;
+  /** Update a block's properties */
   updateBlock(id: string, updates: Partial<IBlock>): void;
+  /** Delete a block by ID */
   deleteBlock(id: string): void;
+  /** Move a block to a new position */
   moveBlock(id: string, newIndex: number): void;
 }
 
+/**
+ * DocumentManager implementation.
+ * 
+ * Manages block collection with change callbacks for UI updates.
+ * Automatically ensures at least one block exists.
+ */
 export class DocumentManager implements IDocumentManager {
   private blocks: Block[];
   private onChange?: (blocks: Block[]) => void;
@@ -66,6 +86,11 @@ export class DocumentManager implements IDocumentManager {
     }
   }
 
+  /**
+   * Generate a unique ID for a block.
+   * Uses crypto.randomUUID() if available, falls back to manual UUID v4 generation.
+   * @returns A UUID v4 string
+   */
   generateId(): string {
     // Generate a UUID v4
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -80,6 +105,9 @@ export class DocumentManager implements IDocumentManager {
     });
   }
 
+  /**
+   * Notify subscribers of changes to the block collection.
+   */
   private notifyChange(): void {
     if (this.onChange) {
       this.onChange(this.getBlocks());

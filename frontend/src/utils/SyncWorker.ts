@@ -1,17 +1,41 @@
+/**
+ * SyncWorker - Manages debounced synchronization of changes to the backend.
+ * 
+ * Implements a queuing system with automatic debouncing to prevent excessive
+ * API calls. All changes are delayed by 300ms and batched together if multiple
+ * edits occur in quick succession.
+ */
+
 import { updateNotebook, updateBlock, createBlock, deleteBlock } from '@/api/auth';
 import { Block } from '@/models/Block';
 
+/**
+ * Types of sync operations that can be queued.
+ */
 type SyncOperation = 
   | { type: 'notebook-name'; notebookId: string; name: string }
   | { type: 'block-update'; notebookId: string; block: Block; isNew: boolean }
   | { type: 'block-delete'; notebookId: string; blockId: string };
 
+/**
+ * Represents a queued operation with its timeout and timestamp.
+ */
 interface QueuedOperation {
   operation: SyncOperation;
   timeout: NodeJS.Timeout;
   timestamp: number;
 }
 
+/**
+ * SyncWorker singleton class for managing backend synchronization.
+ * 
+ * Features:
+ * - Automatic debouncing with 300ms delay
+ * - Prevents duplicate operations
+ * - Tracks created blocks to avoid redundant creates
+ * - Provides sync status callbacks for UI updates
+ * - Handles 404 errors gracefully with automatic recovery
+ */
 class SyncWorker {
   private static instance: SyncWorker;
   private queue: Map<string, QueuedOperation> = new Map();
@@ -33,7 +57,7 @@ class SyncWorker {
   /**
    * Queue a notebook name update
    */
-  queueNotebookNameSync(notebookId: string, name: string, onStatusChange?: (status: 'pending' | 'syncing' | 'synced' | 'error') => void): void {
+  queueNotebookNameSync(notebookId: string, name: string, onStatusChange?: (status: 'pending' | 'syncing' | 'synced' | 'error', errorMessage?: string) => void): void {
     const key = `notebook-${notebookId}`;
     
     // Clear existing timeout if any
@@ -60,7 +84,7 @@ class SyncWorker {
   /**
    * Queue a block update or create operation
    */
-  queueBlockSync(notebookId: string, block: Block, isNew: boolean, onStatusChange?: (blockId: string, status: 'pending' | 'syncing' | 'synced' | 'error') => void): void {
+  queueBlockSync(notebookId: string, block: Block, isNew: boolean, onStatusChange?: (blockId: string, status: 'pending' | 'syncing' | 'synced' | 'error', errorMessage?: string) => void): void {
     const key = `block-${notebookId}-${block.id}`;
     
     // Clear existing timeout if any
@@ -174,11 +198,18 @@ class SyncWorker {
     return this.queue.size > 0 || this.processing.size > 0;
   }
 
+  /**
+   * Process a notebook name update sync operation.
+   * @param notebookId - ID of the notebook to update
+   * @param name - New name for the notebook
+   * @param key - Queue key for tracking
+   * @param onStatusChange - Optional callback for status updates
+   */
   private async processNotebookNameSync(
     notebookId: string, 
     name: string, 
     key: string,
-    onStatusChange?: (status: 'pending' | 'syncing' | 'synced' | 'error') => void
+    onStatusChange?: (status: 'pending' | 'syncing' | 'synced' | 'error', errorMessage?: string) => void
   ): Promise<void> {
     // Remove from queue
     this.queue.delete(key);
@@ -205,18 +236,26 @@ class SyncWorker {
       onStatusChange?.('synced');
     } catch (error) {
       console.error('Failed to sync notebook name:', error);
-      onStatusChange?.('error');
+      onStatusChange?.('error', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       this.processing.delete(key);
     }
   }
 
+  /**
+   * Process a block create/update sync operation.
+   * @param notebookId - ID of the notebook containing the block
+   * @param block - Block data to sync
+   * @param isNew - Whether this is a new block creation
+   * @param key - Queue key for tracking
+   * @param onStatusChange - Optional callback for status updates
+   */
   private async processBlockSync(
     notebookId: string,
     block: Block,
     isNew: boolean,
     key: string,
-    onStatusChange?: (blockId: string, status: 'pending' | 'syncing' | 'synced' | 'error') => void
+    onStatusChange?: (blockId: string, status: 'pending' | 'syncing' | 'synced' | 'error', errorMessage?: string) => void
   ): Promise<void> {
     // Remove from queue
     this.queue.delete(key);
@@ -282,7 +321,7 @@ class SyncWorker {
       onStatusChange?.(block.id, 'synced');
     } catch (error) {
       console.error('Failed to sync block:', block.id, error);
-      onStatusChange?.(block.id, 'error');
+      onStatusChange?.(block.id, 'error', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       this.processing.delete(key);
     }

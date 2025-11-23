@@ -1,39 +1,59 @@
 "use client";
 
+/* 1. Imports */
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { 
   Search, 
   Home, 
-  Inbox, 
   Plus, 
-  ChevronRight, 
   FileText, 
   Settings, 
   HelpCircle,
-  Sparkles,
-  Calendar,
+  BookOpen,
   ChevronDown,
-  LogOut
+  LogOut,
+  Lock,
+  Key
 } from 'lucide-react';
-import { getNotebooks, NotebookConnector, createNotebook, deleteNotebook, getUser, User } from '../api/auth';
+import { getNotebooks, NotebookConnector, createNotebook, deleteNotebook, getUser, User, getEncryptedMasterKey } from '../api/auth';
 import { useMainView } from '../contexts/MainViewContext';
 import NotebookMenu from './NotebookMenu';
+import UnlockModal from './UnlockModal';
+import { CryptoManager } from '../utils/CryptoManager';
+
+/* 2. External Stores */
+// None
 
 export default function Sidebar() {
+  /* 3. Next.js Hooks */
+  const router = useRouter();
   const pathname = usePathname();
+  const { view, setView, notebooks, fetchNotebooks, hasMasterKey, checkMasterKey } = useMainView();
+
+  /* 4. Constants */
+  // None
+
+  /* 5. Refs */
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  /* 6. State */
   const [searchQuery, setSearchQuery] = useState('');
   const [isPrivateExpanded, setIsPrivateExpanded] = useState(true);
   const [creating, setCreating] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
-  const { view, setView, notebooks, fetchNotebooks } = useMainView();
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
+  /* 7. Derived/Computed */
+  const filteredNotebooks = notebooks.filter(n => 
+    n.notebook.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  /* 8. Effects */
   useEffect(() => {
     fetchUser();
   }, []);
@@ -54,6 +74,7 @@ export default function Sidebar() {
     };
   }, [userMenuOpen]);
 
+  /* 9. Methods */
   const fetchUser = async () => {
     try {
       const userData = await getUser();
@@ -63,13 +84,26 @@ export default function Sidebar() {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    router.push('/login');
+  };
+
+  const handleLock = () => {
+    const cryptoManager = CryptoManager.getInstance();
+    cryptoManager.clearMasterKey();
+    checkMasterKey();
+    if (pathname.startsWith('/notebooks/') && pathname !== '/notebooks') {
+      router.push('/notebooks');
+    }
+  };
+
   const handleCreateNotebook = async () => {
+    if (!hasMasterKey) return;
     setCreating(true);
     try {
       const created = await createNotebook('New Notebook');
-      // Redirect to the created notebook
       router.push(`/notebooks/${created.id}`);
-      // Refresh the list in the background
       await fetchNotebooks();
     } catch (err) {
       console.error('Failed to create notebook', err);
@@ -78,14 +112,13 @@ export default function Sidebar() {
     }
   };
 
-  const filteredNotebooks = notebooks.filter(n => 
-    n.notebook.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  /* 10. Expose (like defineExpose) */
+  // None
 
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    router.push('/login');
-  };
+  /* 11. Render Helpers (optional) */
+  // None
+
+  /* 12. JSX Template */
 
   return (
     <div className="w-64 bg-gray-50 border-r border-gray-200 h-screen flex flex-col text-gray-700">
@@ -141,7 +174,35 @@ export default function Sidebar() {
           <Home className="w-4 h-4" />
           <span>Home</span>
         </Link>
+
+        {hasMasterKey && (
+          <button 
+            onClick={handleLock}
+            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-sm hover:bg-gray-200 text-gray-600 text-left"
+          >
+            <Lock className="w-4 h-4" />
+            <span>Lock App</span>
+          </button>
+        )}
       </div>
+
+      {/* Unlock Placeholder */}
+      {!hasMasterKey && (
+        <div className="px-3 mt-4">
+          <button 
+            onClick={() => setShowUnlockModal(true)}
+            className="w-full aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-3 text-gray-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all group"
+          >
+            <div className="relative">
+              <Lock className="w-8 h-8" />
+              <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5">
+                <Key className="w-4 h-4 text-yellow-500" />
+              </div>
+            </div>
+            <span className="text-xs font-medium">Unlock Notebooks</span>
+          </button>
+        </div>
+      )}
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto mt-4 px-3">
@@ -167,35 +228,48 @@ export default function Sidebar() {
             <div className="space-y-0.5">
               {filteredNotebooks.map((connector) => (
                 <div key={connector.notebook.id} className="relative group">
-                  <Link 
-                    href={`/notebooks/${connector.notebook.id}`}
-                    onClick={() => setView(null)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-sm ${(pathname === `/notebooks/${connector.notebook.id}` && view !== 'settings') ? 'bg-gray-200 text-gray-900' : 'hover:bg-gray-200 text-gray-600'}`}
-                  >
-                    <FileText className="w-4 h-4 text-gray-400" />
-                    <span className="truncate flex-1">{connector.notebook.name}</span>
-                  </Link>
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <NotebookMenu
-                      notebookId={connector.notebook.id}
-                      isOpen={openMenuId === connector.notebook.id}
-                      onToggle={() => setOpenMenuId(openMenuId === connector.notebook.id ? null : connector.notebook.id)}
-                      onDelete={async () => {
-                        try {
-                          await deleteNotebook(connector.notebook.id);
-                          setOpenMenuId(null);
-                          // If currently viewing the deleted notebook, navigate back to notebooks list
-                          if (pathname === `/notebooks/${connector.notebook.id}`) {
-                            router.push('/notebooks');
+                  {hasMasterKey ? (
+                    <Link 
+                      href={`/notebooks/${connector.notebook.id}`}
+                      onClick={() => setView(null)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-sm ${(pathname === `/notebooks/${connector.notebook.id}` && view !== 'settings') ? 'bg-gray-200 text-gray-900' : 'hover:bg-gray-200 text-gray-600'}`}
+                    >
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      <span className="truncate flex-1">{connector.notebook.name}</span>
+                    </Link>
+                  ) : (
+                    <div 
+                      onClick={() => setShowUnlockModal(true)}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-sm hover:bg-gray-200 text-gray-600"
+                    >
+                      <Lock className="w-4 h-4 text-gray-400" />
+                      <span className="truncate flex-1">••••••••</span>
+                    </div>
+                  )}
+                  
+                  {hasMasterKey && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <NotebookMenu
+                        notebookId={connector.notebook.id}
+                        isOpen={openMenuId === connector.notebook.id}
+                        onToggle={() => setOpenMenuId(openMenuId === connector.notebook.id ? null : connector.notebook.id)}
+                        onDelete={async () => {
+                          try {
+                            await deleteNotebook(connector.notebook.id);
+                            setOpenMenuId(null);
+                            // If currently viewing the deleted notebook, navigate back to notebooks list
+                            if (pathname === `/notebooks/${connector.notebook.id}`) {
+                              router.push('/notebooks');
+                            }
+                            // Refresh list
+                            await fetchNotebooks();
+                          } catch (err) {
+                            console.error('Failed to delete notebook', err);
                           }
-                          // Refresh list
-                          await fetchNotebooks();
-                        } catch (err) {
-                          console.error('Failed to delete notebook', err);
-                        }
-                      }}
-                    />
-                  </div>
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
               {filteredNotebooks.length === 0 && (
@@ -213,9 +287,9 @@ export default function Sidebar() {
       <div className="p-3 border-t border-gray-200 space-y-1">
         <div className="flex items-center justify-between px-1 mt-2">
            {/* Help & Settings */}
-           <div className="p-1 hover:bg-gray-200 rounded cursor-pointer">
-             <HelpCircle className="w-4 h-4 text-gray-500" />
-           </div>
+           <Link href="/docs" target="_blank" className="p-1 hover:bg-gray-200 rounded cursor-pointer">
+             <BookOpen className="w-4 h-4 text-gray-500" />
+           </Link>
            <button
              onClick={() => setView(view === 'settings' ? null : 'settings')}
              className={`flex items-center gap-1 p-1 hover:bg-gray-200 rounded cursor-pointer text-xs ${view === 'settings' ? 'bg-gray-200 text-gray-900' : 'text-gray-500'}`}
@@ -225,6 +299,12 @@ export default function Sidebar() {
            </button>
         </div>
       </div>
+
+      {/* Unlock Modal */}
+      <UnlockModal 
+        isOpen={showUnlockModal} 
+        onClose={() => setShowUnlockModal(false)} 
+      />
     </div>
   );
 }
