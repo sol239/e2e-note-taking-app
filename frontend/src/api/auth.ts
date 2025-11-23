@@ -1,13 +1,25 @@
+/**
+ * Auth API - Handles all backend API communication.
+ * 
+ * Provides functions for authentication, notebook/block CRUD operations,
+ * export/import, and two-factor authentication. Automatically handles
+ * encryption/decryption of content using CryptoManager.
+ * 
+ * All functions that modify data require an auth token stored in localStorage.
+ */
+
 import FrontendHub from '../utils/FrontendHub';
 import { CryptoManager } from '../utils/CryptoManager';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
+/** Login request payload */
 export interface LoginRequest {
   email: string;
   password: string;
 }
 
+/** Registration request with encrypted master key bundle */
 export interface RegisterRequest {
   email: string;
   password: string;
@@ -18,6 +30,7 @@ export interface RegisterRequest {
   argon_time: number;
 }
 
+/** Encrypted master key bundle from backend */
 export interface EncryptedMasterKeyResponse {
   encrypted_master_key: string;
   nonce: string;
@@ -26,12 +39,14 @@ export interface EncryptedMasterKeyResponse {
   argon_time: number;
 }
 
+/** Authentication response with optional 2FA requirement */
 export interface AuthResponse {
   token?: string;
   tfa_required?: boolean;
   temp_token?: string;
 }
 
+/** Two-factor authentication setup response */
 export interface TFASetupResponse {
   secret: string;
   qr: string;
@@ -75,6 +90,11 @@ export interface User {
   totp_enabled: boolean;
 }
 
+/**
+ * Fetch the authenticated user's profile.
+ * @returns User profile data
+ * @throws Error if not authenticated or request fails
+ */
 export async function getUser(): Promise<User> {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -102,6 +122,12 @@ export async function getUser(): Promise<User> {
   return data;
 }
 
+/**
+ * Authenticate user with email and password.
+ * @param credentials - User email and password
+ * @returns Auth response with token or 2FA requirement
+ * @throws Error if login fails
+ */
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   const url = `${API_BASE_URL}/login/`;
   FrontendHub.logRequest(url, 'POST', credentials);
@@ -125,6 +151,12 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   return data;
 }
 
+/**
+ * Register a new user with encrypted master key.
+ * @param userData - User registration data including encrypted master key bundle
+ * @returns Auth response with token
+ * @throws Error if registration fails
+ */
 export async function register(userData: RegisterRequest): Promise<AuthResponse> {
   const url = `${API_BASE_URL}/register/`;
   FrontendHub.logRequest(url, 'POST', userData);
@@ -148,6 +180,11 @@ export async function register(userData: RegisterRequest): Promise<AuthResponse>
   return data;
 }
 
+/**
+ * Fetch all notebooks for the authenticated user.
+ * @returns Array of notebook connectors with last_opened timestamps
+ * @throws Error if not authenticated or request fails
+ */
 export async function getNotebooks(): Promise<NotebookConnector[]> {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -175,6 +212,12 @@ export async function getNotebooks(): Promise<NotebookConnector[]> {
   return data;
 }
 
+/**
+ * Create a new notebook.
+ * @param name - Name for the new notebook
+ * @returns Created notebook data
+ * @throws Error if not authenticated or creation fails
+ */
 export async function createNotebook(name: string): Promise<Notebook> {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -204,6 +247,13 @@ export async function createNotebook(name: string): Promise<Notebook> {
   return data;
 }
 
+/**
+ * Update a notebook's name.
+ * @param notebookId - ID of the notebook to update
+ * @param name - New name for the notebook
+ * @returns Updated notebook data
+ * @throws Error if not authenticated or update fails
+ */
 export async function updateNotebook(notebookId: string, name: string): Promise<Notebook> {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -233,6 +283,12 @@ export async function updateNotebook(notebookId: string, name: string): Promise<
   return data;
 }
 
+/**
+ * Fetch all blocks for a notebook with automatic decryption.
+ * @param notebookId - ID of the notebook
+ * @returns Array of block connectors with decrypted content
+ * @throws Error if not authenticated or request fails
+ */
 export async function getNotebookBlocks(notebookId: string): Promise<BlockConnector[]> {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -282,6 +338,13 @@ export async function getNotebookBlocks(notebookId: string): Promise<BlockConnec
   return data;
 }
 
+/**
+ * Create a new block with automatic encryption.
+ * @param notebookId - ID of the notebook to add the block to
+ * @param blockData - Block data (content will be encrypted)
+ * @returns Created block with decrypted content
+ * @throws Error if not authenticated, encryption key not loaded, or creation fails
+ */
 export async function createBlock(notebookId: string, blockData: Partial<Block>): Promise<Block> {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -343,6 +406,12 @@ export async function createBlock(notebookId: string, blockData: Partial<Block>)
   return data;
 }
 
+/**
+ * Delete a block from a notebook.
+ * @param notebookId - ID of the notebook containing the block
+ * @param blockId - ID of the block to delete
+ * @throws Error if not authenticated or deletion fails
+ */
 export async function deleteBlock(notebookId: string, blockId: string): Promise<void> {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -368,6 +437,11 @@ export async function deleteBlock(notebookId: string, blockId: string): Promise<
   FrontendHub.logResponse(url, response.status);
 }
 
+/**
+ * Delete a notebook and all its blocks.
+ * @param notebookId - ID of the notebook to delete
+ * @throws Error if not authenticated or deletion fails
+ */
 export async function deleteNotebook(notebookId: string): Promise<void> {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -393,6 +467,14 @@ export async function deleteNotebook(notebookId: string): Promise<void> {
   FrontendHub.logResponse(url, response.status);
 }
 
+/**
+ * Update a block with automatic encryption.
+ * @param notebookId - ID of the notebook containing the block
+ * @param blockId - ID of the block to update
+ * @param blockData - Updated block data (content will be encrypted)
+ * @returns Updated block with decrypted content
+ * @throws Error if not authenticated, encryption key not loaded, or update fails
+ */
 export async function updateBlock(notebookId: string, blockId: string, blockData: Partial<Block>): Promise<Block> {
   console.log("updateBlock() called")
 
@@ -462,6 +544,12 @@ export async function updateBlock(notebookId: string, blockId: string, blockData
   return data;
 }
 
+/**
+ * Export a notebook to JSON or ZIP format and trigger download.
+ * @param notebookId - ID of the notebook to export
+ * @param format - Export format ('json' or 'zip')
+ * @throws Error if not authenticated or export fails
+ */
 export async function exportNotebook(notebookId: string, format: string): Promise<void> {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -508,6 +596,12 @@ export async function exportNotebook(notebookId: string, format: string): Promis
   FrontendHub.logResponse(url, response.status, 'File downloaded');
 }
 
+/**
+ * Import a notebook from a JSON or ZIP file.
+ * @param file - File to import (JSON or ZIP)
+ * @returns Imported notebook data
+ * @throws Error if not authenticated or import fails
+ */
 export async function importNotebook(file: File): Promise<Notebook> {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -539,6 +633,11 @@ export async function importNotebook(file: File): Promise<Notebook> {
   return data;
 }
 
+/**
+ * Initialize two-factor authentication setup.
+ * @returns TFA setup data including QR code and recovery keys
+ * @throws Error if not authenticated or setup fails
+ */
 export async function tfaSetup(): Promise<TFASetupResponse> {
   const token = localStorage.getItem('authToken');
   const url = `${API_BASE_URL}/tfa/setup/`;
@@ -553,6 +652,11 @@ export async function tfaSetup(): Promise<TFASetupResponse> {
   return response.json();
 }
 
+/**
+ * Enable two-factor authentication after setup.
+ * @param code - 6-digit TOTP code from authenticator app
+ * @throws Error if not authenticated or code is invalid
+ */
 export async function tfaEnable(code: string): Promise<void> {
   const token = localStorage.getItem('authToken');
   const url = `${API_BASE_URL}/tfa/enable/`;
@@ -567,6 +671,13 @@ export async function tfaEnable(code: string): Promise<void> {
   if (!response.ok) throw new Error('TFA enable failed');
 }
 
+/**
+ * Verify two-factor authentication code during login.
+ * @param temp_token - Temporary token from initial login
+ * @param code - TOTP code or recovery key
+ * @returns Auth response with final token
+ * @throws Error if verification fails
+ */
 export async function tfaVerify(temp_token: string, code: string): Promise<AuthResponse> {
   const url = `${API_BASE_URL}/tfa/verify/`;
   const response = await fetch(url, {
@@ -580,6 +691,10 @@ export async function tfaVerify(temp_token: string, code: string): Promise<AuthR
   return response.json();
 }
 
+/**
+ * Disable two-factor authentication.
+ * @throws Error if not authenticated or disable fails
+ */
 export async function tfaDisable(): Promise<void> {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -605,6 +720,12 @@ export async function tfaDisable(): Promise<void> {
   FrontendHub.logResponse(url, response.status, {});
 }
 
+/**
+ * Fetch the encrypted master key bundle for the authenticated user.
+ * Used to decrypt the master key after login.
+ * @returns Encrypted master key bundle
+ * @throws Error if not authenticated or request fails
+ */
 export async function getEncryptedMasterKey(): Promise<EncryptedMasterKeyResponse> {
   const token = localStorage.getItem('authToken');
   if (!token) {

@@ -1,4 +1,14 @@
-// Block Model - represents a single content block/cell
+/**
+ * Block Model - Represents a single content block/cell in a notebook.
+ * 
+ * Blocks are the fundamental content units that make up a notebook. Each block
+ * has a type (paragraph, heading, code, etc.), content, and optional metadata
+ * and styling settings.
+ */
+
+/**
+ * Available block types for content blocks.
+ */
 export enum BlockType {
   PARAGRAPH = 'paragraph',
   HEADING1 = 'heading1',
@@ -18,10 +28,17 @@ export enum BlockType {
   NOTEBOOK_LINK = 'notebook_link',
 }
 
+/**
+ * Interface defining the structure of a block.
+ */
 export interface IBlock {
+  /** Unique identifier (UUID) */
   id: string;
+  /** Block type (paragraph, heading, code, etc.) */
   type: BlockType;
+  /** Block content (text, code, URL, etc.) */
   content: string;
+  /** Optional metadata specific to block type */
   metadata?: {
     language?: string; // For code blocks
     checked?: boolean; // For todo items
@@ -53,6 +70,12 @@ export interface IBlock {
   position_order?: number;
 }
 
+/**
+ * Block class implementation with utility methods.
+ * 
+ * Provides methods for cloning blocks and checking if a block is empty.
+ * Immutable operations return new instances rather than modifying in place.
+ */
 export class Block implements IBlock {
   id: string;
   type: BlockType;
@@ -126,10 +149,18 @@ export class Block implements IBlock {
     this.position_order = position_order;
   }
 
+  /**
+   * Create a shallow copy of this block.
+   * @returns A new Block instance with the same properties
+   */
   clone(): Block {
     return new Block(this.id, this.type, this.content, { ...this.metadata }, this.settings, this.position_id, this.position_order);
   }
 
+  /**
+   * Check if the block has no content.
+   * @returns True if content is empty or whitespace-only
+   */
   isEmpty(): boolean {
     return this.content.trim() === '';
   }

@@ -1,17 +1,41 @@
+/**
+ * SyncWorker - Manages debounced synchronization of changes to the backend.
+ * 
+ * Implements a queuing system with automatic debouncing to prevent excessive
+ * API calls. All changes are delayed by 300ms and batched together if multiple
+ * edits occur in quick succession.
+ */
+
 import { updateNotebook, updateBlock, createBlock, deleteBlock } from '@/api/auth';
 import { Block } from '@/models/Block';
 
+/**
+ * Types of sync operations that can be queued.
+ */
 type SyncOperation = 
   | { type: 'notebook-name'; notebookId: string; name: string }
   | { type: 'block-update'; notebookId: string; block: Block; isNew: boolean }
   | { type: 'block-delete'; notebookId: string; blockId: string };
 
+/**
+ * Represents a queued operation with its timeout and timestamp.
+ */
 interface QueuedOperation {
   operation: SyncOperation;
   timeout: NodeJS.Timeout;
   timestamp: number;
 }
 
+/**
+ * SyncWorker singleton class for managing backend synchronization.
+ * 
+ * Features:
+ * - Automatic debouncing with 300ms delay
+ * - Prevents duplicate operations
+ * - Tracks created blocks to avoid redundant creates
+ * - Provides sync status callbacks for UI updates
+ * - Handles 404 errors gracefully with automatic recovery
+ */
 class SyncWorker {
   private static instance: SyncWorker;
   private queue: Map<string, QueuedOperation> = new Map();
@@ -174,6 +198,13 @@ class SyncWorker {
     return this.queue.size > 0 || this.processing.size > 0;
   }
 
+  /**
+   * Process a notebook name update sync operation.
+   * @param notebookId - ID of the notebook to update
+   * @param name - New name for the notebook
+   * @param key - Queue key for tracking
+   * @param onStatusChange - Optional callback for status updates
+   */
   private async processNotebookNameSync(
     notebookId: string, 
     name: string, 
@@ -211,6 +242,14 @@ class SyncWorker {
     }
   }
 
+  /**
+   * Process a block create/update sync operation.
+   * @param notebookId - ID of the notebook containing the block
+   * @param block - Block data to sync
+   * @param isNew - Whether this is a new block creation
+   * @param key - Queue key for tracking
+   * @param onStatusChange - Optional callback for status updates
+   */
   private async processBlockSync(
     notebookId: string,
     block: Block,

@@ -1,15 +1,40 @@
+/**
+ * Bundle containing encrypted master key and all parameters needed for decryption.
+ */
 export interface EncryptedMasterKeyBundle {
+    /** Base64-encoded encrypted master key */
     encryptedMasterKey: string;
+    /** Base64-encoded nonce/IV used for master key encryption */
     masterKeyNonce: string;
+    /** Base64-encoded salt used for key derivation */
     masterKeySalt: string;
-    iterations: number; // Map to argon_memory on backend
+    /** Number of PBKDF2 iterations (maps to argon_memory on backend) */
+    iterations: number;
 }
 
+/**
+ * Encrypted data structure for content encryption.
+ */
 export interface EncryptedData {
+    /** Base64-encoded ciphertext */
     ciphertext: string;
+    /** Base64-encoded initialization vector */
     iv: string;
 }
 
+/**
+ * CryptoManager - Handles end-to-end encryption for the application.
+ * 
+ * Implements AES-GCM encryption with PBKDF2 key derivation. Manages the master key
+ * lifecycle including generation, encryption, decryption, and storage in memory.
+ * Uses Web Crypto API for all cryptographic operations.
+ * 
+ * Security features:
+ * - AES-GCM 256-bit encryption
+ * - PBKDF2 key derivation with 600,000 iterations
+ * - Random nonces/IVs for each encryption
+ * - Master key stored only in memory, never persisted
+ */
 export class CryptoManager {
     private static instance: CryptoManager;
     private masterKey: CryptoKey | null = null;
@@ -194,6 +219,13 @@ export class CryptoManager {
 
     // --- Helper Methods ---
 
+    /**
+     * Derive an encryption key from a password using PBKDF2.
+     * @param password - User's password
+     * @param salt - Salt for key derivation
+     * @param iterations - Number of PBKDF2 iterations
+     * @returns Derived AES-GCM encryption key
+     */
     private async deriveKeyFromPassword(password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
         const passwordBuffer = new TextEncoder().encode(password);
 
@@ -224,6 +256,11 @@ export class CryptoManager {
         );
     }
 
+    /**
+     * Convert ArrayBuffer to base64 string for transmission/storage.
+     * @param buffer - ArrayBuffer or typed array to encode
+     * @returns Base64-encoded string
+     */
     private arrayBufferToBase64(buffer: ArrayBuffer | ArrayBufferView): string {
         let binary = '';
         let bytes: Uint8Array;
@@ -243,6 +280,11 @@ export class CryptoManager {
         return window.btoa(binary);
     }
 
+    /**
+     * Convert base64 string to ArrayBuffer for cryptographic operations.
+     * @param base64 - Base64-encoded string
+     * @returns Decoded ArrayBuffer
+     */
     private base64ToArrayBuffer(base64: string): ArrayBuffer {
         const binaryString = window.atob(base64);
         const len = binaryString.length;

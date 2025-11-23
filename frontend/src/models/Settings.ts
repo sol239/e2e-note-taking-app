@@ -1,5 +1,13 @@
-// Settings types and interfaces for the note-taking app
+/**
+ * Settings - Type definitions for global and block-level styling settings.
+ * 
+ * Provides configuration for heading margins, default fonts, and per-block styling.
+ * Settings can be applied globally or overridden at the block level.
+ */
 
+/**
+ * Global settings applied to all blocks unless overridden.
+ */
 export interface GlobalSettings {
   headingMargins: {
     h1: number; // margin bottom in pixels
@@ -14,17 +22,31 @@ export interface GlobalSettings {
   defaultFontFamily: string;
 }
 
+/**
+ * Block-level styling that can override global settings.
+ */
 export interface BlockStyling {
-  fontSize?: number; // in pixels
+  /** Font size in pixels */
+  fontSize?: number;
+  /** Font family string */
   fontFamily?: string;
-  textColor?: string; // hex color
-  backgroundColor?: string; // hex color
-  borderColor?: string; // hex color
-  borderWidth?: number; // in pixels
-  borderRadius?: number; // in pixels
-  padding?: number; // in pixels
+  /** Text color (hex) */
+  textColor?: string;
+  /** Background color (hex) */
+  backgroundColor?: string;
+  /** Border color (hex) */
+  borderColor?: string;
+  /** Border width in pixels */
+  borderWidth?: number;
+  /** Border radius in pixels */
+  borderRadius?: number;
+  /** Padding in pixels */
+  padding?: number;
 }
 
+/**
+ * Block settings container.
+ */
 export interface BlockSettings {
   styling: BlockStyling;
 }
