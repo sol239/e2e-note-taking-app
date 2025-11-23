@@ -1,13 +1,27 @@
 'use client';
 
-import Link from 'next/link';
+/* 1. Imports */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { login, tfaVerify, getEncryptedMasterKey } from '../../api/auth';
 import OTPInput from '../../components/OTPInput';
 import { CryptoManager } from '../../utils/CryptoManager';
 
+/* 2. External Stores */
+// None
+
 export default function LoginPage() {
+  /* 3. Next.js Hooks */
+  const router = useRouter();
+
+  /* 4. Constants */
+  // None
+
+  /* 5. Refs */
+  // None
+
+  /* 6. State */
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,29 +30,32 @@ export default function LoginPage() {
   const [tempToken, setTempToken] = useState('');
   const [tfaCode, setTfaCode] = useState('');
   const [useRecoveryKey, setUseRecoveryKey] = useState(false);
-  const router = useRouter();
 
+  /* 7. Derived/Computed */
+  // None
+
+  /* 8. Effects */
+  // None
+
+  /* 9. Methods */
   const handleLoginSuccess = async (token: string) => {
     localStorage.setItem('authToken', token);
     
     try {
-      // Fetch encrypted master key
       const keys = await getEncryptedMasterKey();
-      
-      // Decrypt master key
       const cryptoManager = CryptoManager.getInstance();
       await cryptoManager.decryptMasterKey(password, {
         encryptedMasterKey: keys.encrypted_master_key,
         masterKeyNonce: keys.nonce,
         masterKeySalt: keys.salt,
-        iterations: keys.argon_memory // We stored iterations in argon_memory
+        iterations: keys.argon_memory
       });
 
       router.push('/notebooks');
     } catch (err) {
       console.error(err);
       setError('Failed to decrypt master key. Please check your password.');
-      localStorage.removeItem('authToken'); // Clear token if decryption fails
+      localStorage.removeItem('authToken');
     }
   };
 
@@ -68,6 +85,14 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  /* 10. Expose (like defineExpose) */
+  // None
+
+  /* 11. Render Helpers (optional) */
+  // None
+
+  /* 12. JSX Template */
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">

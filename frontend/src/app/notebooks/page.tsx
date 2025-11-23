@@ -1,16 +1,29 @@
 "use client";
 
+/* 1. Imports */
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Trash2, FileText, Clock, Upload, Lock } from 'lucide-react';
 import { getNotebooks, createNotebook, deleteNotebook, NotebookConnector, getUser, User, importNotebook } from '../../api/auth';
-import { Trash2, FileText, Clock, ChevronRight, Upload, Lock } from 'lucide-react';
-import SyncWorker from '../../utils/SyncWorker';
 import { useMainView } from '../../contexts/MainViewContext';
-import { CryptoManager } from '../../utils/CryptoManager';
+
+/* 2. External Stores */
+// None
 
 export default function NotebooksPage() {
+  /* 3. Next.js Hooks */
+  const router = useRouter();
   const { notebooks, fetchNotebooks: contextFetchNotebooks, hasMasterKey } = useMainView();
+
+  /* 4. Constants */
+  // None
+
+  /* 5. Refs */
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  /* 6. State */
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
@@ -20,16 +33,17 @@ export default function NotebooksPage() {
   const [deleting, setDeleting] = useState(false);
   const [greeting, setGreeting] = useState('Good morning');
   const [user, setUser] = useState<User | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  /* 7. Derived/Computed */
+  // None
+
+  /* 8. Effects */
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting('Good morning');
     else if (hour < 18) setGreeting('Good afternoon');
     else setGreeting('Good evening');
 
-    // redirect to login if not authenticated
     if (typeof window !== 'undefined' && !localStorage.getItem('authToken')) {
       router.push('/login');
       return;
@@ -38,8 +52,7 @@ export default function NotebooksPage() {
     fetchUser();
   }, []);
 
-  const router = useRouter();
-
+  /* 9. Methods */
   const fetchUser = async () => {
     try {
       const userData = await getUser();
@@ -123,6 +136,13 @@ export default function NotebooksPage() {
     }
   };
 
+  /* 10. Expose (like defineExpose) */
+  // None
+
+  /* 11. Render Helpers (optional) */
+  // None
+
+  /* 12. JSX Template */
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">

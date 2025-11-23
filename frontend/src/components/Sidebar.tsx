@@ -1,20 +1,17 @@
 "use client";
 
+/* 1. Imports */
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { 
   Search, 
   Home, 
-  Inbox, 
   Plus, 
-  ChevronRight, 
   FileText, 
   Settings, 
   HelpCircle,
-  Sparkles,
-  Calendar,
   ChevronDown,
   LogOut,
   Lock,
@@ -25,29 +22,69 @@ import { useMainView } from '../contexts/MainViewContext';
 import NotebookMenu from './NotebookMenu';
 import { CryptoManager } from '../utils/CryptoManager';
 
+/* 2. External Stores */
+// None
+
 export default function Sidebar() {
+  /* 3. Next.js Hooks */
+  const router = useRouter();
   const pathname = usePathname();
+  const { view, setView, notebooks, fetchNotebooks, hasMasterKey, checkMasterKey } = useMainView();
+
+  /* 4. Constants */
+  const MAX_UNLOCK_ATTEMPTS = 5;
+
+  /* 5. Refs */
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  /* 6. State */
   const [searchQuery, setSearchQuery] = useState('');
   const [isPrivateExpanded, setIsPrivateExpanded] = useState(true);
   const [creating, setCreating] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  
-  // Unlock Modal State
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
 
-  const userMenuRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
-  const { view, setView, notebooks, fetchNotebooks, hasMasterKey, checkMasterKey } = useMainView();
+  /* 7. Derived/Computed */
+  const filteredNotebooks = notebooks.filter(n => 
+    n.notebook.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
+  /* 8. Effects */
   useEffect(() => {
     fetchUser();
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    if (userMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [userMenuOpen]);
+
+  /* 9. Methods */
+  const fetchUser = async () => {
+    try {
+      const userData = await getUser();
+      setUser(userData);
+    } catch (err) {
+      console.error('Failed to load user', err);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('authToken');
@@ -81,12 +118,12 @@ export default function Sidebar() {
       const newFailedAttempts = failedAttempts + 1;
       setFailedAttempts(newFailedAttempts);
 
-      if (newFailedAttempts >= 5) {
+      if (newFailedAttempts >= MAX_UNLOCK_ATTEMPTS) {
         handleLogout();
         return;
       }
 
-      setUnlockError(`Invalid password. ${5 - newFailedAttempts} attempts remaining.`);
+      setUnlockError(`Invalid password. ${MAX_UNLOCK_ATTEMPTS - newFailedAttempts} attempts remaining.`);
     } finally {
       setIsUnlocking(false);
     }
@@ -101,38 +138,11 @@ export default function Sidebar() {
     }
   };
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setUserMenuOpen(false);
-      }
-    };
-
-    if (userMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [userMenuOpen]);
-
-  const fetchUser = async () => {
-    try {
-      const userData = await getUser();
-      setUser(userData);
-    } catch (err) {
-      console.error('Failed to load user', err);
-    }
-  };
-
   const handleCreateNotebook = async () => {
     setCreating(true);
     try {
       const created = await createNotebook('New Notebook');
-      // Redirect to the created notebook
       router.push(`/notebooks/${created.id}`);
-      // Refresh the list in the background
       await fetchNotebooks();
     } catch (err) {
       console.error('Failed to create notebook', err);
@@ -141,9 +151,13 @@ export default function Sidebar() {
     }
   };
 
-  const filteredNotebooks = notebooks.filter(n => 
-    n.notebook.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  /* 10. Expose (like defineExpose) */
+  // None
+
+  /* 11. Render Helpers (optional) */
+  // None
+
+  /* 12. JSX Template */
 
   return (
     <div className="w-64 bg-gray-50 border-r border-gray-200 h-screen flex flex-col text-gray-700">
