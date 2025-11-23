@@ -12,6 +12,7 @@ import {
   FileText, 
   Settings, 
   HelpCircle,
+  BookOpen,
   ChevronDown,
   LogOut,
   Lock,
@@ -286,9 +287,9 @@ export default function Sidebar() {
       <div className="p-3 border-t border-gray-200 space-y-1">
         <div className="flex items-center justify-between px-1 mt-2">
            {/* Help & Settings */}
-           <div className="p-1 hover:bg-gray-200 rounded cursor-pointer">
-             <HelpCircle className="w-4 h-4 text-gray-500" />
-           </div>
+           <Link href="/docs" target="_blank" className="p-1 hover:bg-gray-200 rounded cursor-pointer">
+             <BookOpen className="w-4 h-4 text-gray-500" />
+           </Link>
            <button
              onClick={() => setView(view === 'settings' ? null : 'settings')}
              className={`flex items-center gap-1 p-1 hover:bg-gray-200 rounded cursor-pointer text-xs ${view === 'settings' ? 'bg-gray-200 text-gray-900' : 'text-gray-500'}`}
