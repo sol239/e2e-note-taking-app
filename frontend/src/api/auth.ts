@@ -12,6 +12,8 @@ import FrontendHub from '../utils/FrontendHub';
 import { CryptoManager } from '../utils/CryptoManager';
 
 const API_BASE_URL = 'http://localhost:8000/api';
+const ACCOUNTS_URL = `${API_BASE_URL}/accounts`;
+const NOTES_URL = `${API_BASE_URL}/notes`;
 
 /** Login request payload */
 export interface LoginRequest {
@@ -101,7 +103,7 @@ export async function getUser(): Promise<User> {
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/user/`;
+  const url = `${ACCOUNTS_URL}/user/`;
   FrontendHub.logRequest(url, 'GET');
 
   const response = await fetch(url, {
@@ -129,7 +131,7 @@ export async function getUser(): Promise<User> {
  * @throws Error if login fails
  */
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {
-  const url = `${API_BASE_URL}/login/`;
+  const url = `${ACCOUNTS_URL}/login/`;
   FrontendHub.logRequest(url, 'POST', credentials);
 
   const response = await fetch(url, {
@@ -158,7 +160,7 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
  * @throws Error if registration fails
  */
 export async function register(userData: RegisterRequest): Promise<AuthResponse> {
-  const url = `${API_BASE_URL}/register/`;
+  const url = `${ACCOUNTS_URL}/register/`;
   FrontendHub.logRequest(url, 'POST', userData);
 
   const response = await fetch(url, {
@@ -191,7 +193,7 @@ export async function getNotebooks(): Promise<NotebookConnector[]> {
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/notebooks/`;
+  const url = `${NOTES_URL}/notebooks/`;
   FrontendHub.logRequest(url, 'GET');
 
   const response = await fetch(url, {
@@ -224,7 +226,7 @@ export async function createNotebook(name: string): Promise<Notebook> {
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/notebooks/`;
+  const url = `${NOTES_URL}/notebooks/`;
   const body = { name };
   FrontendHub.logRequest(url, 'POST', body);
 
@@ -260,7 +262,7 @@ export async function updateNotebook(notebookId: string, name: string): Promise<
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/notebooks/${notebookId}/`;
+  const url = `${NOTES_URL}/notebooks/${notebookId}/`;
   const body = { name };
   FrontendHub.logRequest(url, 'PUT', body);
 
@@ -295,7 +297,7 @@ export async function getNotebookBlocks(notebookId: string): Promise<BlockConnec
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/notebooks/${notebookId}/blocks/`;
+  const url = `${NOTES_URL}/notebooks/${notebookId}/blocks/`;
   FrontendHub.logRequest(url, 'GET');
 
   const response = await fetch(url, {
@@ -351,7 +353,7 @@ export async function createBlock(notebookId: string, blockData: Partial<Block>)
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/notebooks/${notebookId}/blocks/`;
+  const url = `${NOTES_URL}/notebooks/${notebookId}/blocks/`;
 
   // Encrypt content if available
   const cryptoManager = CryptoManager.getInstance();
@@ -418,7 +420,7 @@ export async function deleteBlock(notebookId: string, blockId: string): Promise<
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/notebooks/${notebookId}/blocks/${blockId}/`;
+  const url = `${NOTES_URL}/notebooks/${notebookId}/blocks/${blockId}/`;
   FrontendHub.logRequest(url, 'DELETE');
 
   const response = await fetch(url, {
@@ -448,7 +450,7 @@ export async function deleteNotebook(notebookId: string): Promise<void> {
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/notebooks/${notebookId}/`;
+  const url = `${NOTES_URL}/notebooks/${notebookId}/`;
   FrontendHub.logRequest(url, 'DELETE');
 
   const response = await fetch(url, {
@@ -483,7 +485,7 @@ export async function updateBlock(notebookId: string, blockId: string, blockData
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/notebooks/${notebookId}/blocks/${blockId}/`;
+  const url = `${NOTES_URL}/notebooks/${notebookId}/blocks/${blockId}/`;
 
   // Encrypt content if available
   const cryptoManager = CryptoManager.getInstance();
@@ -556,7 +558,7 @@ export async function exportNotebook(notebookId: string, format: string): Promis
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/notebooks/${notebookId}/export/?export_format=${format}`;
+  const url = `${NOTES_URL}/notebooks/${notebookId}/export/?export_format=${format}`;
   FrontendHub.logRequest(url, 'GET');
 
   const response = await fetch(url, {
@@ -608,7 +610,7 @@ export async function importNotebook(file: File): Promise<Notebook> {
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/notebooks/import/`;
+  const url = `${NOTES_URL}/notebooks/import/`;
   const formData = new FormData();
   formData.append('file', file);
 
@@ -640,7 +642,7 @@ export async function importNotebook(file: File): Promise<Notebook> {
  */
 export async function tfaSetup(): Promise<TFASetupResponse> {
   const token = localStorage.getItem('authToken');
-  const url = `${API_BASE_URL}/tfa/setup/`;
+  const url = `${ACCOUNTS_URL}/tfa/setup/`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -659,7 +661,7 @@ export async function tfaSetup(): Promise<TFASetupResponse> {
  */
 export async function tfaEnable(code: string): Promise<void> {
   const token = localStorage.getItem('authToken');
-  const url = `${API_BASE_URL}/tfa/enable/`;
+  const url = `${ACCOUNTS_URL}/tfa/enable/`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -679,7 +681,7 @@ export async function tfaEnable(code: string): Promise<void> {
  * @throws Error if verification fails
  */
 export async function tfaVerify(temp_token: string, code: string): Promise<AuthResponse> {
-  const url = `${API_BASE_URL}/tfa/verify/`;
+  const url = `${ACCOUNTS_URL}/tfa/verify/`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -701,7 +703,7 @@ export async function tfaDisable(): Promise<void> {
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/tfa/disable/`;
+  const url = `${ACCOUNTS_URL}/tfa/disable/`;
   FrontendHub.logRequest(url, 'POST');
 
   const response = await fetch(url, {
@@ -732,7 +734,7 @@ export async function getEncryptedMasterKey(): Promise<EncryptedMasterKeyRespons
     throw new Error('No auth token found');
   }
 
-  const url = `${API_BASE_URL}/keys/`;
+  const url = `${ACCOUNTS_URL}/encrypted-master/`;
   FrontendHub.logRequest(url, 'GET');
 
   const response = await fetch(url, {
@@ -761,7 +763,7 @@ export async function deleteAccount(): Promise<void> {
   const token = localStorage.getItem('authToken');
   if (!token) throw new Error('No auth token found');
 
-  const response = await fetch(`${API_BASE_URL}/delete/`, {
+  const response = await fetch(`${ACCOUNTS_URL}/delete/`, {
     method: 'DELETE',
     headers: {
       'Authorization': `Token ${token}`,
@@ -791,7 +793,7 @@ export async function changePassword(data: ChangePasswordRequest): Promise<void>
   const token = localStorage.getItem('authToken');
   if (!token) throw new Error('No auth token found');
 
-  const response = await fetch(`${API_BASE_URL}/change-password/`, {
+  const response = await fetch(`${ACCOUNTS_URL}/change-password/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
