@@ -102,6 +102,18 @@ def login_view(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def tfa_setup(request):
+    """
+    Initialize two-factor authentication for the user.
+
+    Generates a TOTP secret, recovery keys, and QR code for the user.
+    The user must verify the setup using tfa_enable endpoint.
+
+    Returns:
+        - secret: TOTP secret key
+        - qr: Base64-encoded QR code image
+        - uri: TOTP URI for manual entry
+        - recovery_keys: List of 5 backup recovery keys
+    """
     user = request.user
     secret = pyotp.random_base32()
     user.totp_secret = secret
@@ -131,6 +143,18 @@ def tfa_setup(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def tfa_enable(request):
+    """
+    Enable two-factor authentication after setup.
+
+    Verifies the TOTP code to ensure the user has correctly configured their
+    authenticator app before enabling 2FA.
+
+    Request Body:
+        code (str): 6-digit TOTP code from authenticator app
+
+    Returns:
+        Success message if code is valid, error otherwise.
+    """
     user = request.user
     code = request.data.get("code")
 
@@ -149,6 +173,15 @@ def tfa_enable(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def tfa_disable(request):
+    """
+    Disable two-factor authentication for the user.
+
+    Removes TOTP secret, disables 2FA, and deletes recovery keys.
+    User will no longer be prompted for 2FA codes during login.
+
+    Returns:
+        Success message confirming 2FA has been disabled.
+    """
     user = request.user
     user.totp_enabled = False
     user.totp_secret = None
@@ -159,6 +192,19 @@ def tfa_disable(request):
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def tfa_verify(request):
+    """
+    Verify two-factor authentication code during login.
+
+    Accepts either a 6-digit TOTP code or a recovery key.
+    If a recovery key is used, 2FA is automatically disabled.
+
+    Request Body:
+        temp_token (str): Temporary session token from login
+        code (str): TOTP code or recovery key
+
+    Returns:
+        Authentication token if verification succeeds.
+    """
     temp_token = request.data.get("temp_token")
     code = request.data.get("code")
 
@@ -210,6 +256,15 @@ def tfa_verify(request):
 def get_encrypted_master(request):
     """
     Retrieve the encrypted master key and related parameters for the authenticated user.
+
+    Returns the encrypted master key bundle needed for client-side decryption:
+    - encrypted_master_key: Base64-encoded encrypted master key
+    - nonce: Encryption nonce/IV
+    - salt: Key derivation salt
+    - argon_time: Argon2 time parameter
+    - argon_memory: Argon2 memory parameter (also used for PBKDF2 iterations)
+
+    Used by the frontend to decrypt the master key using the user's password.
     """
     user = request.user
     return Response({

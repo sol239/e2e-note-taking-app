@@ -1,3 +1,10 @@
+"""
+Backend Hub - Centralized logging system for API requests and responses.
+
+Provides a singleton logger that outputs to both file and console with
+color-coded formatting for better visibility during development.
+"""
+
 import json
 import logging
 from datetime import datetime
@@ -6,6 +13,13 @@ from typing import Any, Optional
 
 
 class BackendHub:
+    """
+    Singleton class for centralized backend logging.
+
+    Logs all API requests, responses, and errors to both file and console.
+    Daily log files are created in the logs/ directory.
+    """
+
     _instance = None
     
     def __new__(cls):
@@ -15,7 +29,13 @@ class BackendHub:
         return cls._instance
     
     def _initialize(self):
-        """Initialize the logging system"""
+        """
+        Initialize the logging system.
+
+        Creates the logs directory if needed and sets up both file and console
+        handlers with appropriate formatters. Log files are named with the
+        current date (api_YYYYMMDD.log).
+        """
         # Create logs directory if it doesn't exist
         log_dir = Path(__file__).parent.parent / 'logs'
         log_dir.mkdir(exist_ok=True)
@@ -52,7 +72,15 @@ class BackendHub:
         self.logger.addHandler(console_handler)
     
     def log_request(self, method: str, path: str, user: Optional[str] = None, data: Any = None):
-        """Log incoming request"""
+        """
+        Log an incoming API request.
+
+        Args:
+            method (str): HTTP method (GET, POST, PUT, DELETE, etc.)
+            path (str): Request path/endpoint
+            user (str, optional): Authenticated user identifier
+            data (Any, optional): Request payload data
+        """
         log_data = {
             'type': 'REQUEST',
             'method': method,
@@ -88,7 +116,15 @@ class BackendHub:
         print(f"{'='*80}\n")
     
     def log_response(self, method: str, path: str, status: int, data: Any = None):
-        """Log outgoing response"""
+        """
+        Log an outgoing API response.
+
+        Args:
+            method (str): HTTP method of the original request
+            path (str): Request path/endpoint
+            status (int): HTTP status code of the response
+            data (Any, optional): Response data (only logged for errors)
+        """
         log_data = {
             'type': 'RESPONSE',
             'method': method,
@@ -115,7 +151,14 @@ class BackendHub:
         print()
     
     def log_error(self, method: str, path: str, error: Exception):
-        """Log error"""
+        """
+        Log an error that occurred during request processing.
+
+        Args:
+            method (str): HTTP method of the request
+            path (str): Request path/endpoint
+            error (Exception): The exception that was raised
+        """
         message = f"ERROR: {method} {path} | {str(error)}"
         self.logger.error(message)
         print(f"❌ ERROR: {method} {path}")

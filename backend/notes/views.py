@@ -151,6 +151,20 @@ def block_detail(request, notebook_id, block_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def export_notebook(request, notebook_id):
+    """
+    Export a notebook with all its blocks and assets.
+
+    Supports two export formats:
+    - JSON: Simple JSON export with embedded base64 assets
+    - ZIP: Structured export with separate asset files
+
+    Query Parameters:
+        export_format (str): Format type ('json' or 'zip'). Defaults to 'json'.
+
+    Returns:
+        - JSON file with notebook data (export_format=json)
+        - ZIP file containing notebook.json and assets folder (export_format=zip)
+    """
     try:
         connector = NotebookUserConnector.objects.get(user=request.user, notebook_id=notebook_id)
         notebook = connector.notebook
@@ -232,6 +246,19 @@ def export_notebook(request, notebook_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def import_notebook(request):
+    """
+    Import a notebook from a JSON or ZIP file.
+
+    Accepts:
+    - .json files: Plain JSON export with embedded assets
+    - .zip files: ZIP export with notebook.json and assets folder
+
+    The imported notebook is automatically associated with the authenticated user.
+    All blocks and their positions are preserved.
+
+    Returns:
+        Response with the created notebook's ID and name.
+    """
     if 'file' not in request.FILES:
         return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
     

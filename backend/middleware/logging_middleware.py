@@ -1,13 +1,36 @@
+"""
+Logging Middleware for Django REST Framework.
+
+Automatically logs all incoming requests and outgoing responses using
+the BackendHub singleton logger.
+"""
+
 import json
 from django.utils.deprecation import MiddlewareMixin
 from utils.backend_hub import backend_hub
 
 
 class LoggingMiddleware(MiddlewareMixin):
-    """Middleware to log all API requests and responses"""
+    """
+    Middleware to log all API requests and responses.
+
+    Integrates with BackendHub to provide comprehensive logging of all
+    HTTP traffic, including request data, user information, and response status.
+    """
     
     def process_request(self, request):
-        """Log incoming request"""
+        """
+        Log incoming HTTP request.
+
+        Extracts and logs request method, path, authenticated user, and
+        request data for POST/PUT/PATCH requests.
+
+        Args:
+            request: Django HttpRequest object
+
+        Returns:
+            None to continue processing the request
+        """
         # Get request data
         data = None
         if request.method in ['POST', 'PUT', 'PATCH']:
@@ -35,7 +58,19 @@ class LoggingMiddleware(MiddlewareMixin):
         return None
     
     def process_response(self, request, response):
-        """Log outgoing response"""
+        """
+        Log outgoing HTTP response.
+
+        Logs the response status code and associates it with the original
+        request for correlation.
+
+        Args:
+            request: Django HttpRequest object
+            response: Django HttpResponse object
+
+        Returns:
+            The unmodified response object
+        """
         # Log the response
         backend_hub.log_response(
             method=request.method,
@@ -47,7 +82,16 @@ class LoggingMiddleware(MiddlewareMixin):
         return response
     
     def process_exception(self, request, exception):
-        """Log exceptions"""
+        """
+        Log exceptions raised during request processing.
+
+        Args:
+            request: Django HttpRequest object
+            exception: The exception that was raised
+
+        Returns:
+            None to allow Django to handle the exception normally
+        """
         backend_hub.log_error(
             method=request.method,
             path=request.path,
