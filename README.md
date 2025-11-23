@@ -12,7 +12,7 @@ A modern, secure note-taking application with end-to-end encryption, built with 
 
 - **[User Guide](docs/USER_GUIDE.md)** - Complete guide for end users
 - **[Architecture](docs/ARCHITECTURE.md)** - Complete architecture of the application
-- **API Documenta**tion** - Available at `/api/schema/swagger-ui/` when running the backend (http://localhost:8000/api/schema/swagger-ui/)
+- **API Documentation** - Available at `/api/schema/swagger-ui/` when running the backend (http://localhost:8000/api/schema/swagger-ui/)
 
 ## 🌟 Features
 
