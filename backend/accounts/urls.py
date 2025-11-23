@@ -10,4 +10,6 @@ urlpatterns = [
     path('tfa/enable/', views.tfa_enable, name='tfa-enable'),
     path('tfa/disable/', views.tfa_disable, name='tfa-disable'),
     path('tfa/verify/', views.tfa_verify, name='tfa-verify'),
+    path('delete/', views.delete_user, name='delete-user'),
+    path('change-password/', views.change_password, name='change-password'),
 ]

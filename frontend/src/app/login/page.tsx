@@ -106,17 +106,6 @@ export default function LoginPage() {
               </div>
               <span className="text-xl font-bold text-gray-900">Notes</span>
             </Link>
-            <div className="flex items-center space-x-4">
-              <Link href="/login" className="text-gray-600 hover:text-gray-900 transition-colors">
-                Login
-              </Link>
-              <Link
-                href="/register"
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
-              >
-                Get Started
-              </Link>
-            </div>
           </div>
         </div>
       </nav>

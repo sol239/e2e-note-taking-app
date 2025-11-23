@@ -14,6 +14,7 @@ import json
 import random
 import string
 from django.core.cache import cache
+from notes.models import NotebookUserConnector
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -274,3 +275,62 @@ def get_encrypted_master(request):
         'argon_time': user.argon_time,
         'argon_memory': user.argon_memory,
     })
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def delete_user(request):
+    """
+    Delete the authenticated user account and all associated data.
+    """
+    user = request.user
+    # Get all notebooks for this user
+    user_connectors = list(NotebookUserConnector.objects.filter(user=user))
+    for connector in user_connectors:
+        notebook = connector.notebook
+        # Check if this notebook has other users
+        other_users_count = NotebookUserConnector.objects.filter(notebook=notebook).exclude(user=user).count()
+        if other_users_count == 0:
+            notebook.delete()
+    
+    user.delete()
+    return Response({'message': 'Account deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def change_password(request):
+    """
+    Change user password and update encrypted master key.
+    """
+    user = request.user
+    old_password = request.data.get('old_password')
+    new_password = request.data.get('new_password')
+    
+    # E2E Encryption fields
+    encrypted_master_key = request.data.get('encrypted_master_key')
+    master_key_nonce = request.data.get('master_key_nonce')
+    master_key_salt = request.data.get('master_key_salt')
+    argon_time = request.data.get('argon_time')
+    argon_memory = request.data.get('argon_memory')
+
+    if not new_password or not encrypted_master_key:
+        return Response({'error': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Verify old password if provided (optional but recommended)
+    if old_password and not user.check_password(old_password):
+        return Response({'error': 'Invalid old password'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Update password
+    user.set_password(new_password)
+    
+    # Update E2E fields
+    user.encrypted_master_key = encrypted_master_key
+    user.master_key_nonce = master_key_nonce
+    user.master_key_salt = master_key_salt
+    if argon_time:
+        user.argon_time = argon_time
+    if argon_memory:
+        user.argon_memory = argon_memory
+        
+    user.save()
+    
+    return Response({'message': 'Password changed successfully'})

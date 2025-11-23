@@ -159,13 +159,51 @@ export class CryptoManager {
                     name: this.ALGORITHM,
                     length: this.KEY_LENGTH,
                 },
-                false, // not extractable anymore, we keep it in memory
+                true, // extractable to allow re-encryption (password change)
                 ['encrypt', 'decrypt']
             );
         } catch (error) {
             console.error("Failed to decrypt master key:", error);
             throw new Error("Invalid password or corrupted key data.");
         }
+    }
+
+    /**
+     * Re-encrypts the current Master Key with a new password.
+     * Used during Password Change.
+     */
+    public async reEncryptMasterKey(newPassword: string): Promise<EncryptedMasterKeyBundle> {
+        if (!this.masterKey) {
+            throw new Error("Master key not loaded.");
+        }
+
+        // 1. Export the current Master Key
+        const masterKeyRaw = await window.crypto.subtle.exportKey('raw', this.masterKey);
+
+        // 2. Generate a new random Salt
+        const salt = window.crypto.getRandomValues(new Uint8Array(this.SALT_LENGTH));
+
+        // 3. Derive a new Wrapping Key from the new password
+        const wrappingKey = await this.deriveKeyFromPassword(newPassword, salt, this.DEFAULT_ITERATIONS);
+
+        // 4. Encrypt the Master Key using the new Wrapping Key
+        const iv = window.crypto.getRandomValues(new Uint8Array(this.IV_LENGTH));
+        const encryptedMasterKeyBuffer = await window.crypto.subtle.encrypt(
+            {
+                name: this.ALGORITHM,
+                iv: iv,
+            },
+            wrappingKey,
+            masterKeyRaw
+        );
+
+        // 5. Return the bundle
+        return {
+            encryptedMasterKey: this.arrayBufferToBase64(encryptedMasterKeyBuffer),
+            masterKeyNonce: this.arrayBufferToBase64(iv),
+            masterKeySalt: this.arrayBufferToBase64(salt),
+            iterations: this.DEFAULT_ITERATIONS,
+        };
     }
 
     /**

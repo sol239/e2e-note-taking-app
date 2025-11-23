@@ -752,3 +752,56 @@ export async function getEncryptedMasterKey(): Promise<EncryptedMasterKeyRespons
   FrontendHub.logResponse(url, response.status, data);
   return data;
 }
+
+/**
+ * Delete the authenticated user's account and all associated data.
+ * @throws Error if deletion fails
+ */
+export async function deleteAccount(): Promise<void> {
+  const token = localStorage.getItem('authToken');
+  if (!token) throw new Error('No auth token found');
+
+  const response = await fetch(`${API_BASE_URL}/delete/`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Token ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to delete account');
+  }
+}
+
+/** Change password request payload */
+export interface ChangePasswordRequest {
+  old_password?: string; // Optional if we validate on frontend, but backend should validate too
+  new_password: string;
+  encrypted_master_key: string;
+  master_key_nonce: string;
+  master_key_salt: string;
+  argon_memory: number;
+  argon_time: number;
+}
+
+/**
+ * Change the user's password and re-encrypt the master key.
+ */
+export async function changePassword(data: ChangePasswordRequest): Promise<void> {
+  const token = localStorage.getItem('authToken');
+  if (!token) throw new Error('No auth token found');
+
+  const response = await fetch(`${API_BASE_URL}/change-password/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Token ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to change password');
+  }
+}

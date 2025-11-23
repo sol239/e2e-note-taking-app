@@ -1,11 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { getUser, User, tfaSetup, tfaEnable, tfaDisable, TFASetupResponse } from '../api/auth';
-import { Pencil, Check, X, User as UserIcon, ShieldCheck } from 'lucide-react';
+import { getUser, User, tfaSetup, tfaEnable, tfaDisable, TFASetupResponse, deleteAccount, changePassword } from '../api/auth';
+import { Pencil, Check, X, User as UserIcon, ShieldCheck, Trash2, AlertTriangle, Lock } from 'lucide-react';
 import OTPInput from './OTPInput';
+import { useRouter } from 'next/navigation';
+import { CryptoManager } from '../utils/CryptoManager';
 
 export default function UserSettings({ className = '' }: { className?: string }) {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
@@ -16,6 +19,14 @@ export default function UserSettings({ className = '' }: { className?: string })
   const [tfaData, setTfaData] = useState<TFASetupResponse | null>(null);
   const [tfaCode, setTfaCode] = useState('');
   const [showTfaSetup, setShowTfaSetup] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  // Password Change State
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordMessage, setPasswordMessage] = useState('');
 
   useEffect(() => {
     fetchUser();
@@ -105,6 +116,61 @@ export default function UserSettings({ className = '' }: { className?: string })
       fetchUser();
     } catch (err) {
       setMessage('Failed to disable TFA');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+        await deleteAccount();
+        localStorage.removeItem('authToken');
+        router.push('/login');
+    } catch (err) {
+        setMessage('Failed to delete account');
+        setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmNewPassword) {
+        setPasswordMessage('New passwords do not match');
+        return;
+    }
+    if (newPassword.length < 8) {
+        setPasswordMessage('Password must be at least 8 characters long');
+        return;
+    }
+
+    setLoading(true);
+    setPasswordMessage('');
+
+    try {
+        // 1. Re-encrypt master key with new password
+        const cryptoManager = CryptoManager.getInstance();
+        const encryptedBundle = await cryptoManager.reEncryptMasterKey(newPassword);
+
+        // 2. Send to backend
+        await changePassword({
+            old_password: currentPassword,
+            new_password: newPassword,
+            encrypted_master_key: encryptedBundle.encryptedMasterKey,
+            master_key_nonce: encryptedBundle.masterKeyNonce,
+            master_key_salt: encryptedBundle.masterKeySalt,
+            argon_memory: encryptedBundle.iterations,
+            argon_time: 4 // Default value
+        });
+
+        setPasswordMessage('Password changed successfully');
+        setTimeout(() => {
+            setShowChangePassword(false);
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmNewPassword('');
+            setPasswordMessage('');
+        }, 2000);
+    } catch (err: any) {
+        setPasswordMessage(err.message || 'Failed to change password');
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -297,6 +363,124 @@ export default function UserSettings({ className = '' }: { className?: string })
                     )}
                   </div>
                 )
+            )}
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-red-50 text-red-600 rounded-lg">
+                    <AlertTriangle size={20} />
+                </div>
+                <h2 className="text-lg font-semibold text-gray-900">Danger Zone</h2>
+            </div>
+            
+            {!showDeleteConfirm ? (
+                <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors border border-red-200"
+                >
+                    <Trash2 size={18} />
+                    Delete Account
+                </button>
+            ) : (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <h3 className="text-red-800 font-medium mb-2">Are you sure you want to delete your account?</h3>
+                    <p className="text-red-600 text-sm mb-4">
+                        This action cannot be undone. All your notebooks, notes, and personal data will be permanently deleted.
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={handleDeleteAccount}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                        >
+                            Yes, Delete My Account
+                        </button>
+                        <button
+                            onClick={() => setShowDeleteConfirm(false)}
+                            className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
+          </div>
+
+          {/* Password Change Section */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-orange-50 text-orange-600 rounded-lg">
+                    <Lock size={20} />
+                </div>
+                <h2 className="text-lg font-semibold text-gray-900">Password</h2>
+            </div>
+
+            {!showChangePassword ? (
+                <button
+                    onClick={() => setShowChangePassword(true)}
+                    className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                    Change Password
+                </button>
+            ) : (
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 max-w-md">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                            <input
+                                type="password"
+                                value={currentPassword}
+                                onChange={(e) => setCurrentPassword(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                            <input
+                                type="password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                            <input
+                                type="password"
+                                value={confirmNewPassword}
+                                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                            />
+                        </div>
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                onClick={handleChangePassword}
+                                disabled={loading}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            >
+                                {loading ? 'Updating...' : 'Update Password'}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowChangePassword(false);
+                                    setCurrentPassword('');
+                                    setNewPassword('');
+                                    setConfirmNewPassword('');
+                                    setPasswordMessage('');
+                                }}
+                                disabled={loading}
+                                className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                        {passwordMessage && (
+                            <div className={`mt-3 text-sm ${passwordMessage.includes('Failed') || passwordMessage.includes('match') || passwordMessage.includes('long') ? 'text-red-600' : 'text-green-600'}`}>
+                                {passwordMessage}
+                            </div>
+                        )}
+                    </div>
+                </div>
             )}
           </div>
         </div>
