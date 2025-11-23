@@ -20,6 +20,7 @@ import {
 import { getNotebooks, NotebookConnector, createNotebook, deleteNotebook, getUser, User, getEncryptedMasterKey } from '../api/auth';
 import { useMainView } from '../contexts/MainViewContext';
 import NotebookMenu from './NotebookMenu';
+import UnlockModal from './UnlockModal';
 import { CryptoManager } from '../utils/CryptoManager';
 
 /* 2. External Stores */
@@ -32,7 +33,7 @@ export default function Sidebar() {
   const { view, setView, notebooks, fetchNotebooks, hasMasterKey, checkMasterKey } = useMainView();
 
   /* 4. Constants */
-  const MAX_UNLOCK_ATTEMPTS = 5;
+  // None
 
   /* 5. Refs */
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -45,10 +46,6 @@ export default function Sidebar() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
-  const [unlockPassword, setUnlockPassword] = useState('');
-  const [unlockError, setUnlockError] = useState('');
-  const [isUnlocking, setIsUnlocking] = useState(false);
-  const [failedAttempts, setFailedAttempts] = useState(0);
 
   /* 7. Derived/Computed */
   const filteredNotebooks = notebooks.filter(n => 
@@ -91,44 +88,6 @@ export default function Sidebar() {
     router.push('/login');
   };
 
-  const handleUnlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setUnlockError('');
-    setIsUnlocking(true);
-
-    try {
-      const bundleResponse = await getEncryptedMasterKey();
-      const bundle = {
-        encryptedMasterKey: bundleResponse.encrypted_master_key,
-        masterKeyNonce: bundleResponse.nonce,
-        masterKeySalt: bundleResponse.salt,
-        iterations: bundleResponse.argon_memory
-      };
-
-      const cryptoManager = CryptoManager.getInstance();
-      await cryptoManager.decryptMasterKey(unlockPassword, bundle);
-      
-      checkMasterKey();
-      setShowUnlockModal(false);
-      setUnlockPassword('');
-      setFailedAttempts(0);
-      
-    } catch (err) {
-      console.error(err);
-      const newFailedAttempts = failedAttempts + 1;
-      setFailedAttempts(newFailedAttempts);
-
-      if (newFailedAttempts >= MAX_UNLOCK_ATTEMPTS) {
-        handleLogout();
-        return;
-      }
-
-      setUnlockError(`Invalid password. ${MAX_UNLOCK_ATTEMPTS - newFailedAttempts} attempts remaining.`);
-    } finally {
-      setIsUnlocking(false);
-    }
-  };
-
   const handleLock = () => {
     const cryptoManager = CryptoManager.getInstance();
     cryptoManager.clearMasterKey();
@@ -139,6 +98,7 @@ export default function Sidebar() {
   };
 
   const handleCreateNotebook = async () => {
+    if (!hasMasterKey) return;
     setCreating(true);
     try {
       const created = await createNotebook('New Notebook');
@@ -263,39 +223,52 @@ export default function Sidebar() {
             </div>
           </div>
           
-          {isPrivateExpanded && hasMasterKey && (
+          {isPrivateExpanded && (
             <div className="space-y-0.5">
               {filteredNotebooks.map((connector) => (
                 <div key={connector.notebook.id} className="relative group">
-                  <Link 
-                    href={`/notebooks/${connector.notebook.id}`}
-                    onClick={() => setView(null)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-sm ${(pathname === `/notebooks/${connector.notebook.id}` && view !== 'settings') ? 'bg-gray-200 text-gray-900' : 'hover:bg-gray-200 text-gray-600'}`}
-                  >
-                    <FileText className="w-4 h-4 text-gray-400" />
-                    <span className="truncate flex-1">{connector.notebook.name}</span>
-                  </Link>
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <NotebookMenu
-                      notebookId={connector.notebook.id}
-                      isOpen={openMenuId === connector.notebook.id}
-                      onToggle={() => setOpenMenuId(openMenuId === connector.notebook.id ? null : connector.notebook.id)}
-                      onDelete={async () => {
-                        try {
-                          await deleteNotebook(connector.notebook.id);
-                          setOpenMenuId(null);
-                          // If currently viewing the deleted notebook, navigate back to notebooks list
-                          if (pathname === `/notebooks/${connector.notebook.id}`) {
-                            router.push('/notebooks');
+                  {hasMasterKey ? (
+                    <Link 
+                      href={`/notebooks/${connector.notebook.id}`}
+                      onClick={() => setView(null)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-sm ${(pathname === `/notebooks/${connector.notebook.id}` && view !== 'settings') ? 'bg-gray-200 text-gray-900' : 'hover:bg-gray-200 text-gray-600'}`}
+                    >
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      <span className="truncate flex-1">{connector.notebook.name}</span>
+                    </Link>
+                  ) : (
+                    <div 
+                      onClick={() => setShowUnlockModal(true)}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-sm hover:bg-gray-200 text-gray-600"
+                    >
+                      <Lock className="w-4 h-4 text-gray-400" />
+                      <span className="truncate flex-1">••••••••</span>
+                    </div>
+                  )}
+                  
+                  {hasMasterKey && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <NotebookMenu
+                        notebookId={connector.notebook.id}
+                        isOpen={openMenuId === connector.notebook.id}
+                        onToggle={() => setOpenMenuId(openMenuId === connector.notebook.id ? null : connector.notebook.id)}
+                        onDelete={async () => {
+                          try {
+                            await deleteNotebook(connector.notebook.id);
+                            setOpenMenuId(null);
+                            // If currently viewing the deleted notebook, navigate back to notebooks list
+                            if (pathname === `/notebooks/${connector.notebook.id}`) {
+                              router.push('/notebooks');
+                            }
+                            // Refresh list
+                            await fetchNotebooks();
+                          } catch (err) {
+                            console.error('Failed to delete notebook', err);
                           }
-                          // Refresh list
-                          await fetchNotebooks();
-                        } catch (err) {
-                          console.error('Failed to delete notebook', err);
-                        }
-                      }}
-                    />
-                  </div>
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
               {filteredNotebooks.length === 0 && (
@@ -327,69 +300,10 @@ export default function Sidebar() {
       </div>
 
       {/* Unlock Modal */}
-      {showUnlockModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 transform transition-all">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
-                <Lock className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Unlock Notebooks</h2>
-                <p className="text-sm text-gray-500">Enter your password to decrypt your master key</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleUnlock}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  value={unlockPassword}
-                  onChange={(e) => setUnlockPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  placeholder="Enter your password"
-                  autoFocus
-                />
-                {unlockError && (
-                  <p className="text-red-500 text-sm mt-1">{unlockError}</p>
-                )}
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowUnlockModal(false);
-                    setUnlockError('');
-                    setUnlockPassword('');
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUnlocking || !unlockPassword}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isUnlocking ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Unlocking...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Key className="w-4 h-4" />
-                      <span>Unlock</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <UnlockModal 
+        isOpen={showUnlockModal} 
+        onClose={() => setShowUnlockModal(false)} 
+      />
     </div>
   );
 }

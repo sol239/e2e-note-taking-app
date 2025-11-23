@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Trash2, FileText, Clock, Upload, Lock } from 'lucide-react';
 import { getNotebooks, createNotebook, deleteNotebook, NotebookConnector, getUser, User, importNotebook } from '../../api/auth';
 import { useMainView } from '../../contexts/MainViewContext';
+import UnlockModal from '../../components/UnlockModal';
 
 /* 2. External Stores */
 // None
@@ -33,6 +34,7 @@ export default function NotebooksPage() {
   const [deleting, setDeleting] = useState(false);
   const [greeting, setGreeting] = useState('Good morning');
   const [user, setUser] = useState<User | null>(null);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   /* 7. Derived/Computed */
   // None
@@ -170,7 +172,8 @@ export default function NotebooksPage() {
       <div className="mb-6 flex gap-3">
         <button
           onClick={handleCreateNotebook}
-          disabled={creating}
+          disabled={creating || !hasMasterKey}
+          title={!hasMasterKey ? "Unlock to create notebook" : ""}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {creating ? (
@@ -183,7 +186,8 @@ export default function NotebooksPage() {
 
         <button
           onClick={handleImportClick}
-          disabled={importing}
+          disabled={importing || !hasMasterKey}
+          title={!hasMasterKey ? "Unlock to import notebook" : ""}
           className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {importing ? (
@@ -250,7 +254,8 @@ export default function NotebooksPage() {
                   return (
                     <div
                       key={connector.notebook.id}
-                      className="group bg-gray-50 rounded-xl p-4 border border-transparent block flex-shrink-0 w-64 cursor-not-allowed opacity-70"
+                      onClick={() => setShowUnlockModal(true)}
+                      className="group bg-gray-50 rounded-xl p-4 border border-transparent block flex-shrink-0 w-64 cursor-pointer opacity-70 hover:bg-gray-100"
                       title="Master key required to access"
                     >
                       <Content />
@@ -306,6 +311,12 @@ export default function NotebooksPage() {
           </div>
         </div>
       )}
+
+      {/* Unlock Modal */}
+      <UnlockModal 
+        isOpen={showUnlockModal} 
+        onClose={() => setShowUnlockModal(false)} 
+      />
     </div>
   );
 }
