@@ -10,12 +10,13 @@ import { Check, X, Loader2, Download, Database } from 'lucide-react';
 import SyncWorker from '../../../utils/SyncWorker';
 import ExportModal from '../../../components/ExportModal';
 import { useMainView } from '../../../contexts/MainViewContext';
+import { CryptoManager } from '../../../utils/CryptoManager';
 
 export default function NotebookPage() {
   const params = useParams();
   const router = useRouter();
   const notebookId = params.id as string;
-  const { getNotebookById, updateNotebookConnectorInStore } = useMainView();
+  const { getNotebookById, updateNotebookConnectorInStore, updateNotebookInStore } = useMainView();
 
   const currentNotebook = getNotebookById(notebookId);
   const notebookName = currentNotebook?.notebook.name || '';
@@ -26,6 +27,7 @@ export default function NotebookPage() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingName, setEditingName] = useState('');
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
+  const [syncErrorMessage, setSyncErrorMessage] = useState<string>('');
   const [blockSyncStates, setBlockSyncStates] = useState<Map<string, 'pending' | 'syncing' | 'synced' | 'error'>>(new Map());
   const [existingBlockIds, setExistingBlockIds] = useState<Set<string>>(new Set());
   const [previousBlocks, setPreviousBlocks] = useState<Map<string, Block>>(new Map());
@@ -91,6 +93,14 @@ export default function NotebookPage() {
         router.push('/login');
         return;
       }
+
+      // Check for master key
+      const cryptoManager = CryptoManager.getInstance();
+      if (!cryptoManager.hasMasterKey()) {
+        router.push('/notebooks');
+        return;
+      }
+
       fetchNotebookData();
     }
   }, [notebookId]);
@@ -111,13 +121,16 @@ export default function NotebookPage() {
     syncWorker.current.queueNotebookNameSync(
       notebookId,
       newName,
-      (status) => {
+      (status, errorMessage) => {
         if (status === 'syncing' || status === 'pending') {
           setSyncStatus('syncing');
+          setSyncErrorMessage('');
         } else if (status === 'error') {
           setSyncStatus('error');
+          setSyncErrorMessage(errorMessage || 'Unknown error');
         } else {
           setSyncStatus('synced');
+          setSyncErrorMessage('');
         }
       }
     );
@@ -209,13 +222,17 @@ export default function NotebookPage() {
         notebookId,
         block,
         isNew,
-        (blockId, status) => {
+        (blockId, status, errorMessage) => {
           setBlockSyncStates(prev => {
             const newStates = new Map(prev);
             newStates.set(blockId, status);
             return newStates;
           });
           
+          if (status === 'error') {
+            setSyncErrorMessage(errorMessage || 'Unknown error');
+          }
+
           // If block was created, add to existing blocks set
           if (status === 'synced' && isNew) {
             setExistingBlockIds(prev => new Set([...prev, blockId]));
@@ -260,7 +277,8 @@ export default function NotebookPage() {
 
   const handleNameSave = async () => {
     if (editingName.trim() && editingName.trim() !== notebookName) {
-      setNotebookName(editingName.trim());
+      // Optimistic update
+      updateNotebookInStore(notebookId, { name: editingName.trim() });
       
       // Queue notebook name sync with delay
       queueNotebookNameSync(editingName.trim());
@@ -343,21 +361,36 @@ export default function NotebookPage() {
           <Database className="w-3 h-3" />
           <span>Database View</span>
         </button>
-        <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs ${
-          syncStatus === 'synced' 
-            ? 'bg-green-100 text-green-800' 
-            : syncStatus === 'syncing'
-            ? 'bg-blue-100 text-blue-800'
-            : 'bg-red-100 text-red-800'
-        }`}>
-          {syncStatus === 'synced' ? (
-            <Check className="w-3 h-3" />
-          ) : syncStatus === 'syncing' ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : (
-            <X className="w-3 h-3" />
+        <div className="relative group">
+          <div 
+            className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs cursor-default ${
+            syncStatus === 'synced' 
+              ? 'bg-green-100 text-green-800' 
+              : syncStatus === 'syncing'
+              ? 'bg-blue-100 text-blue-800'
+              : 'bg-red-100 text-red-800'
+          }`}>
+            {syncStatus === 'synced' ? (
+              <Check className="w-3 h-3" />
+            ) : syncStatus === 'syncing' ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <X className="w-3 h-3" />
+            )}
+            <span>{syncStatus === 'synced' ? 'Synced' : syncStatus === 'syncing' ? 'Syncing' : 'Sync error'}</span>
+          </div>
+          
+          {syncStatus === 'error' && syncErrorMessage && (
+            <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-white border border-red-200 text-gray-800 text-xs rounded-lg shadow-xl z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <div className="font-semibold text-red-600 mb-1 flex items-center">
+                <X className="w-3 h-3 mr-1" />
+                Sync Failed
+              </div>
+              <div className="text-gray-600 leading-relaxed break-words">{syncErrorMessage}</div>
+              {/* Arrow pointing up */}
+              <div className="absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-red-200 transform rotate-45"></div>
+            </div>
           )}
-          <span>{syncStatus === 'synced' ? 'Synced' : syncStatus === 'syncing' ? 'Syncing' : 'Sync error'}</span>
         </div>
       </div>
 

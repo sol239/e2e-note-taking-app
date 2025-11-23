@@ -26,11 +26,29 @@ def register(request):
     email = request.data.get('email')
     password = request.data.get('password')
     nickname = request.data.get('nickname')
+
+    # E2E Encryption fields
+    encrypted_master_key = request.data.get('encrypted_master_key')
+    master_key_nonce = request.data.get('master_key_nonce')
+    master_key_salt = request.data.get('master_key_salt')
+    argon_time = request.data.get('argon_time', 4)
+    argon_memory = request.data.get('argon_memory', 32768)
+
     if not email or not password:
         return Response({'error': 'Email and password required'}, status=status.HTTP_400_BAD_REQUEST)
     if User.objects.filter(email=email).exists():
         return Response({'error': 'User already exists'}, status=status.HTTP_400_BAD_REQUEST)
-    user = User.objects.create_user(email=email, password=password, nickname=nickname)
+    
+    user = User.objects.create_user(
+        email=email, 
+        password=password, 
+        nickname=nickname,
+        encrypted_master_key=encrypted_master_key,
+        master_key_nonce=master_key_nonce,
+        master_key_salt=master_key_salt,
+        argon_time=argon_time,
+        argon_memory=argon_memory
+    )
     token, created = Token.objects.get_or_create(user=user)
     return Response({'token': token.key}, status=status.HTTP_201_CREATED)
 
@@ -185,4 +203,19 @@ def tfa_verify(request):
     return Response({
         "token": token.key,
         "tfa_required": False
+    })
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_encrypted_master(request):
+    """
+    Retrieve the encrypted master key and related parameters for the authenticated user.
+    """
+    user = request.user
+    return Response({
+        'encrypted_master_key': user.encrypted_master_key,
+        'nonce': user.master_key_nonce,
+        'salt': user.master_key_salt,
+        'argon_time': user.argon_time,
+        'argon_memory': user.argon_memory,
     })

@@ -16,11 +16,14 @@ import {
   Sparkles,
   Calendar,
   ChevronDown,
-  LogOut
+  LogOut,
+  Lock,
+  Key
 } from 'lucide-react';
-import { getNotebooks, NotebookConnector, createNotebook, deleteNotebook, getUser, User } from '../api/auth';
+import { getNotebooks, NotebookConnector, createNotebook, deleteNotebook, getUser, User, getEncryptedMasterKey } from '../api/auth';
 import { useMainView } from '../contexts/MainViewContext';
 import NotebookMenu from './NotebookMenu';
+import { CryptoManager } from '../utils/CryptoManager';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -30,13 +33,73 @@ export default function Sidebar() {
   const [user, setUser] = useState<User | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  
+  // Unlock Modal State
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [unlockError, setUnlockError] = useState('');
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+
   const userMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { view, setView, notebooks, fetchNotebooks } = useMainView();
+  const { view, setView, notebooks, fetchNotebooks, hasMasterKey, checkMasterKey } = useMainView();
 
   useEffect(() => {
     fetchUser();
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    router.push('/login');
+  };
+
+  const handleUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUnlockError('');
+    setIsUnlocking(true);
+
+    try {
+      const bundleResponse = await getEncryptedMasterKey();
+      const bundle = {
+        encryptedMasterKey: bundleResponse.encrypted_master_key,
+        masterKeyNonce: bundleResponse.nonce,
+        masterKeySalt: bundleResponse.salt,
+        iterations: bundleResponse.argon_memory
+      };
+
+      const cryptoManager = CryptoManager.getInstance();
+      await cryptoManager.decryptMasterKey(unlockPassword, bundle);
+      
+      checkMasterKey();
+      setShowUnlockModal(false);
+      setUnlockPassword('');
+      setFailedAttempts(0);
+      
+    } catch (err) {
+      console.error(err);
+      const newFailedAttempts = failedAttempts + 1;
+      setFailedAttempts(newFailedAttempts);
+
+      if (newFailedAttempts >= 5) {
+        handleLogout();
+        return;
+      }
+
+      setUnlockError(`Invalid password. ${5 - newFailedAttempts} attempts remaining.`);
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  const handleLock = () => {
+    const cryptoManager = CryptoManager.getInstance();
+    cryptoManager.clearMasterKey();
+    checkMasterKey();
+    if (pathname.startsWith('/notebooks/') && pathname !== '/notebooks') {
+      router.push('/notebooks');
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -81,11 +144,6 @@ export default function Sidebar() {
   const filteredNotebooks = notebooks.filter(n => 
     n.notebook.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    router.push('/login');
-  };
 
   return (
     <div className="w-64 bg-gray-50 border-r border-gray-200 h-screen flex flex-col text-gray-700">
@@ -141,7 +199,35 @@ export default function Sidebar() {
           <Home className="w-4 h-4" />
           <span>Home</span>
         </Link>
+
+        {hasMasterKey && (
+          <button 
+            onClick={handleLock}
+            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-sm hover:bg-gray-200 text-gray-600 text-left"
+          >
+            <Lock className="w-4 h-4" />
+            <span>Lock App</span>
+          </button>
+        )}
       </div>
+
+      {/* Unlock Placeholder */}
+      {!hasMasterKey && (
+        <div className="px-3 mt-4">
+          <button 
+            onClick={() => setShowUnlockModal(true)}
+            className="w-full aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-3 text-gray-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all group"
+          >
+            <div className="relative">
+              <Lock className="w-8 h-8" />
+              <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5">
+                <Key className="w-4 h-4 text-yellow-500" />
+              </div>
+            </div>
+            <span className="text-xs font-medium">Unlock Notebooks</span>
+          </button>
+        </div>
+      )}
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto mt-4 px-3">
@@ -163,7 +249,7 @@ export default function Sidebar() {
             </div>
           </div>
           
-          {isPrivateExpanded && (
+          {isPrivateExpanded && hasMasterKey && (
             <div className="space-y-0.5">
               {filteredNotebooks.map((connector) => (
                 <div key={connector.notebook.id} className="relative group">
@@ -225,6 +311,71 @@ export default function Sidebar() {
            </button>
         </div>
       </div>
+
+      {/* Unlock Modal */}
+      {showUnlockModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 transform transition-all">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Unlock Notebooks</h2>
+                <p className="text-sm text-gray-500">Enter your password to decrypt your master key</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleUnlock}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input
+                  type="password"
+                  value={unlockPassword}
+                  onChange={(e) => setUnlockPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  placeholder="Enter your password"
+                  autoFocus
+                />
+                {unlockError && (
+                  <p className="text-red-500 text-sm mt-1">{unlockError}</p>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUnlockModal(false);
+                    setUnlockError('');
+                    setUnlockPassword('');
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUnlocking || !unlockPassword}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isUnlocking ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Unlocking...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Key className="w-4 h-4" />
+                      <span>Unlock</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

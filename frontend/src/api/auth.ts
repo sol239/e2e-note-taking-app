@@ -1,4 +1,5 @@
 import FrontendHub from '../utils/FrontendHub';
+import { CryptoManager } from '../utils/CryptoManager';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -10,6 +11,19 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string;
   password: string;
+  encrypted_master_key: string;
+  master_key_nonce: string;
+  master_key_salt: string;
+  argon_memory: number; // Used for iterations in PBKDF2
+  argon_time: number;
+}
+
+export interface EncryptedMasterKeyResponse {
+  encrypted_master_key: string;
+  nonce: string;
+  salt: string;
+  argon_memory: number;
+  argon_time: number;
 }
 
 export interface AuthResponse {
@@ -242,6 +256,28 @@ export async function getNotebookBlocks(notebookId: string): Promise<BlockConnec
   }
 
   const data = await response.json();
+
+  // Decrypt content
+  const cryptoManager = CryptoManager.getInstance();
+  if (cryptoManager.hasMasterKey()) {
+    for (const connector of data) {
+      if (connector.block.content) {
+        try {
+          // Check if content looks like JSON
+          if (connector.block.content.trim().startsWith('{')) {
+            const encryptedData = JSON.parse(connector.block.content);
+            if (encryptedData.ciphertext && encryptedData.iv) {
+              connector.block.content = await cryptoManager.decryptData(encryptedData);
+            }
+          }
+        } catch (e) {
+          // Content might not be encrypted or invalid JSON, keep as is
+          console.warn(`Failed to decrypt block ${connector.block.id}`, e);
+        }
+      }
+    }
+  }
+
   FrontendHub.logResponse(url, response.status, data);
   return data;
 }
@@ -253,7 +289,25 @@ export async function createBlock(notebookId: string, blockData: Partial<Block>)
   }
 
   const url = `${API_BASE_URL}/notebooks/${notebookId}/blocks/`;
-  FrontendHub.logRequest(url, 'POST', blockData);
+
+  // Encrypt content if available
+  const cryptoManager = CryptoManager.getInstance();
+  const dataToSend = { ...blockData };
+
+  if (dataToSend.content) {
+    if (!cryptoManager.hasMasterKey()) {
+      throw new Error("Encryption key not loaded. Cannot save unencrypted content.");
+    }
+    try {
+      const encrypted = await cryptoManager.encryptData(dataToSend.content);
+      dataToSend.content = JSON.stringify(encrypted);
+    } catch (e) {
+      console.error("Failed to encrypt block content", e);
+      throw e;
+    }
+  }
+
+  FrontendHub.logRequest(url, 'POST', dataToSend);
 
   const response = await fetch(url, {
     method: 'POST',
@@ -261,7 +315,7 @@ export async function createBlock(notebookId: string, blockData: Partial<Block>)
       'Authorization': `Token ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(blockData),
+    body: JSON.stringify(dataToSend),
   });
 
   if (!response.ok) {
@@ -270,6 +324,21 @@ export async function createBlock(notebookId: string, blockData: Partial<Block>)
   }
 
   const data = await response.json();
+
+  // Decrypt response content so the UI has the plaintext
+  if (data.content && cryptoManager.hasMasterKey()) {
+    try {
+      if (data.content.trim().startsWith('{')) {
+        const encryptedData = JSON.parse(data.content);
+        if (encryptedData.ciphertext && encryptedData.iv) {
+          data.content = await cryptoManager.decryptData(encryptedData);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to decrypt created block content", e);
+    }
+  }
+
   FrontendHub.logResponse(url, response.status, data);
   return data;
 }
@@ -325,13 +394,36 @@ export async function deleteNotebook(notebookId: string): Promise<void> {
 }
 
 export async function updateBlock(notebookId: string, blockId: string, blockData: Partial<Block>): Promise<Block> {
+  console.log("updateBlock() called")
+
   const token = localStorage.getItem('authToken');
   if (!token) {
     throw new Error('No auth token found');
   }
 
   const url = `${API_BASE_URL}/notebooks/${notebookId}/blocks/${blockId}/`;
-  FrontendHub.logRequest(url, 'PUT', blockData);
+
+  // Encrypt content if available
+  const cryptoManager = CryptoManager.getInstance();
+  const dataToSend = { ...blockData };
+
+  cryptoManager.logCryptoManagerDetails();
+
+  if (dataToSend.content) {
+    if (!cryptoManager.hasMasterKey()) {
+      throw new Error("Encryption key not loaded. Cannot save unencrypted content.");
+    }
+    try {
+      const encrypted = await cryptoManager.encryptData(dataToSend.content);
+      console.log("Encrypted data:", encrypted);
+      dataToSend.content = JSON.stringify(encrypted);
+    } catch (e) {
+      console.error("Failed to encrypt block content", e);
+      throw e;
+    }
+  }
+
+  FrontendHub.logRequest(url, 'PUT', dataToSend);
 
   const response = await fetch(url, {
     method: 'PUT',
@@ -339,7 +431,7 @@ export async function updateBlock(notebookId: string, blockId: string, blockData
       'Authorization': `Token ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(blockData),
+    body: JSON.stringify(dataToSend),
   });
 
   if (!response.ok) {
@@ -351,6 +443,21 @@ export async function updateBlock(notebookId: string, blockId: string, blockData
   }
 
   const data = await response.json();
+
+  // Decrypt response content
+  if (data.content && cryptoManager.hasMasterKey()) {
+    try {
+      if (data.content.trim().startsWith('{')) {
+        const encryptedData = JSON.parse(data.content);
+        if (encryptedData.ciphertext && encryptedData.iv) {
+          data.content = await cryptoManager.decryptData(encryptedData);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to decrypt updated block content", e);
+    }
+  }
+
   FrontendHub.logResponse(url, response.status, data);
   return data;
 }
@@ -381,7 +488,7 @@ export async function exportNotebook(notebookId: string, format: string): Promis
   const downloadUrl = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = downloadUrl;
-  
+
   // Try to get filename from header
   const contentDisposition = response.headers.get('Content-Disposition');
   let filename = `notebook-${notebookId}.${format === 'zip' ? 'zip' : 'json'}`;
@@ -391,13 +498,13 @@ export async function exportNotebook(notebookId: string, format: string): Promis
       filename = filenameMatch[1];
     }
   }
-  
+
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   window.URL.revokeObjectURL(downloadUrl);
   document.body.removeChild(a);
-  
+
   FrontendHub.logResponse(url, response.status, 'File downloaded');
 }
 
@@ -410,7 +517,7 @@ export async function importNotebook(file: File): Promise<Notebook> {
   const url = `${API_BASE_URL}/notebooks/import/`;
   const formData = new FormData();
   formData.append('file', file);
-  
+
   FrontendHub.logRequest(url, 'POST', 'File upload');
 
   const response = await fetch(url, {
@@ -496,4 +603,31 @@ export async function tfaDisable(): Promise<void> {
   }
 
   FrontendHub.logResponse(url, response.status, {});
+}
+
+export async function getEncryptedMasterKey(): Promise<EncryptedMasterKeyResponse> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    throw new Error('No auth token found');
+  }
+
+  const url = `${API_BASE_URL}/keys/`;
+  FrontendHub.logRequest(url, 'GET');
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Token ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    FrontendHub.logError(url, `Status: ${response.status}`);
+    throw new Error('Failed to fetch master key bundle');
+  }
+
+  const data = await response.json();
+  FrontendHub.logResponse(url, response.status, data);
+  return data;
 }

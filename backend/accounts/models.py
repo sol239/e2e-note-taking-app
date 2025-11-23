@@ -35,6 +35,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     totp_enabled = models.BooleanField(default=False)
     recovery_keys = models.TextField(blank=True, null=True) # Stored as JSON list
 
+    # E2E Encryption fields
+    encrypted_master_key = models.TextField(blank=True, null=True)
+    master_key_nonce = models.CharField(max_length=64, blank=True, null=True) # Base64 encoded
+    master_key_salt = models.CharField(max_length=64, blank=True, null=True) # Base64 encoded
+    argon_time = models.IntegerField(default=4)
+    argon_memory = models.IntegerField(default=32768)
+
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 

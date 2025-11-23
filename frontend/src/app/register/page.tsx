@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { register } from '../../api/auth';
+import { CryptoManager } from '../../utils/CryptoManager';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
@@ -25,9 +26,22 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const response = await register({ email, password });
+      // Generate and encrypt master key
+      const cryptoManager = CryptoManager.getInstance();
+      const bundle = await cryptoManager.generateAndEncryptMasterKey(password);
+
+      const response = await register({ 
+        email, 
+        password,
+        encrypted_master_key: bundle.encryptedMasterKey,
+        master_key_nonce: bundle.masterKeyNonce,
+        master_key_salt: bundle.masterKeySalt,
+        argon_memory: bundle.iterations,
+        argon_time: 1 // Default value
+      });
+      
       // Store the token (you might want to use a more secure method in production)
-      localStorage.setItem('authToken', response.token);
+      localStorage.setItem('authToken', response.token!); // response.token is optional in interface but required here
       router.push('/notebooks'); // Redirect to notebooks page after successful registration
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

@@ -33,7 +33,7 @@ class SyncWorker {
   /**
    * Queue a notebook name update
    */
-  queueNotebookNameSync(notebookId: string, name: string, onStatusChange?: (status: 'pending' | 'syncing' | 'synced' | 'error') => void): void {
+  queueNotebookNameSync(notebookId: string, name: string, onStatusChange?: (status: 'pending' | 'syncing' | 'synced' | 'error', errorMessage?: string) => void): void {
     const key = `notebook-${notebookId}`;
     
     // Clear existing timeout if any
@@ -60,7 +60,7 @@ class SyncWorker {
   /**
    * Queue a block update or create operation
    */
-  queueBlockSync(notebookId: string, block: Block, isNew: boolean, onStatusChange?: (blockId: string, status: 'pending' | 'syncing' | 'synced' | 'error') => void): void {
+  queueBlockSync(notebookId: string, block: Block, isNew: boolean, onStatusChange?: (blockId: string, status: 'pending' | 'syncing' | 'synced' | 'error', errorMessage?: string) => void): void {
     const key = `block-${notebookId}-${block.id}`;
     
     // Clear existing timeout if any
@@ -178,7 +178,7 @@ class SyncWorker {
     notebookId: string, 
     name: string, 
     key: string,
-    onStatusChange?: (status: 'pending' | 'syncing' | 'synced' | 'error') => void
+    onStatusChange?: (status: 'pending' | 'syncing' | 'synced' | 'error', errorMessage?: string) => void
   ): Promise<void> {
     // Remove from queue
     this.queue.delete(key);
@@ -205,7 +205,7 @@ class SyncWorker {
       onStatusChange?.('synced');
     } catch (error) {
       console.error('Failed to sync notebook name:', error);
-      onStatusChange?.('error');
+      onStatusChange?.('error', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       this.processing.delete(key);
     }
@@ -216,7 +216,7 @@ class SyncWorker {
     block: Block,
     isNew: boolean,
     key: string,
-    onStatusChange?: (blockId: string, status: 'pending' | 'syncing' | 'synced' | 'error') => void
+    onStatusChange?: (blockId: string, status: 'pending' | 'syncing' | 'synced' | 'error', errorMessage?: string) => void
   ): Promise<void> {
     // Remove from queue
     this.queue.delete(key);
@@ -282,7 +282,7 @@ class SyncWorker {
       onStatusChange?.(block.id, 'synced');
     } catch (error) {
       console.error('Failed to sync block:', block.id, error);
-      onStatusChange?.(block.id, 'error');
+      onStatusChange?.(block.id, 'error', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       this.processing.delete(key);
     }

@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { login, tfaVerify } from '../../api/auth';
+import { login, tfaVerify, getEncryptedMasterKey } from '../../api/auth';
 import OTPInput from '../../components/OTPInput';
+import { CryptoManager } from '../../utils/CryptoManager';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -16,6 +17,30 @@ export default function LoginPage() {
   const [tfaCode, setTfaCode] = useState('');
   const [useRecoveryKey, setUseRecoveryKey] = useState(false);
   const router = useRouter();
+
+  const handleLoginSuccess = async (token: string) => {
+    localStorage.setItem('authToken', token);
+    
+    try {
+      // Fetch encrypted master key
+      const keys = await getEncryptedMasterKey();
+      
+      // Decrypt master key
+      const cryptoManager = CryptoManager.getInstance();
+      await cryptoManager.decryptMasterKey(password, {
+        encryptedMasterKey: keys.encrypted_master_key,
+        masterKeyNonce: keys.nonce,
+        masterKeySalt: keys.salt,
+        iterations: keys.argon_memory // We stored iterations in argon_memory
+      });
+
+      router.push('/notebooks');
+    } catch (err) {
+      console.error(err);
+      setError('Failed to decrypt master key. Please check your password.');
+      localStorage.removeItem('authToken'); // Clear token if decryption fails
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,14 +54,12 @@ export default function LoginPage() {
           setTempToken(response.temp_token);
           setStep('tfa');
         } else if (response.token) {
-          localStorage.setItem('authToken', response.token);
-          router.push('/notebooks'); // Redirect to notebooks page after successful login
+          await handleLoginSuccess(response.token);
         }
       } else {
         const response = await tfaVerify(tempToken, tfaCode);
         if (response.token) {
-          localStorage.setItem('authToken', response.token);
-          router.push('/notebooks');
+          await handleLoginSuccess(response.token);
         }
       }
     } catch (err) {
