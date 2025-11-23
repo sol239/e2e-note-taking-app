@@ -19,12 +19,6 @@ describe('Register Page', () => {
     cy.get('button[type="submit"]').should('contain', 'Create Account');
   });
 
-  it('should have working form inputs', () => {
-    cy.get('#email').type('e2e__test@example.com').should('have.value', 'e2e__test@example.com');
-    cy.get('#password').type('testpassword123').should('have.value', 'testpassword123');
-    cy.get('#confirmPassword').type('testpassword123').should('have.value', 'testpassword123');
-  });
-
   it('should display link to login page', () => {
     cy.contains('Already have an account?').should('be.visible');
     cy.contains('Sign in here').should('be.visible');
@@ -42,5 +36,6 @@ describe('Register Page', () => {
 
     // Wait for redirect and check URL
     cy.url({ timeout: 10000 }).should('include', '/notebooks');
+
   });
 });

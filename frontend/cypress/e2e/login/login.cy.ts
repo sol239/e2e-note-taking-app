@@ -16,4 +16,14 @@ describe('Login Page', () => {
     cy.contains('Email Address').should('be.visible');
     cy.contains('Password').should('be.visible');
   });
+
+  it('should login successfully with valid credentials', () => {
+    cy.get('#email').type('e2e__login__1@test.com');
+    cy.get('#password').type('password');
+
+    cy.get('button[type="submit"]').click();
+
+    // Wait for redirect and check URL
+    cy.url({ timeout: 10000 }).should('include', '/notebooks');
+  });
 });

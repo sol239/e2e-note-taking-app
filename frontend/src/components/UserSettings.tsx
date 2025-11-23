@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { getUser, User, tfaSetup, tfaEnable, tfaDisable, TFASetupResponse, deleteAccount, changePassword } from '../api/auth';
+import { getUser, User, tfaSetup, tfaEnable, tfaDisable, TFASetupResponse, deleteAccount, changePassword, getEncryptedMasterKey } from '../api/auth';
 import { Pencil, Check, X, User as UserIcon, ShieldCheck, Trash2, AlertTriangle, Lock } from 'lucide-react';
 import OTPInput from './OTPInput';
 import { useRouter } from 'next/navigation';
@@ -120,6 +120,8 @@ export default function UserSettings({ className = '' }: { className?: string })
   };
 
   const handleDeleteAccount = async () => {
+    if (loading) return;
+    setLoading(true);
     try {
         await deleteAccount();
         localStorage.removeItem('authToken');
@@ -127,6 +129,8 @@ export default function UserSettings({ className = '' }: { className?: string })
     } catch (err) {
         setMessage('Failed to delete account');
         setShowDeleteConfirm(false);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -144,11 +148,27 @@ export default function UserSettings({ className = '' }: { className?: string })
     setPasswordMessage('');
 
     try {
-        // 1. Re-encrypt master key with new password
+        // 1. Ensure master key is loaded
         const cryptoManager = CryptoManager.getInstance();
+        
+        if (!cryptoManager.hasMasterKey()) {
+            try {
+                const bundle = await getEncryptedMasterKey();
+                await cryptoManager.decryptMasterKey(currentPassword, {
+                    encryptedMasterKey: bundle.encrypted_master_key,
+                    masterKeyNonce: bundle.nonce,
+                    masterKeySalt: bundle.salt,
+                    iterations: bundle.argon_memory
+                });
+            } catch (err) {
+                throw new Error('Invalid current password or failed to decrypt master key');
+            }
+        }
+
+        // 2. Re-encrypt master key with new password
         const encryptedBundle = await cryptoManager.reEncryptMasterKey(newPassword);
 
-        // 2. Send to backend
+        // 3. Send to backend
         await changePassword({
             old_password: currentPassword,
             new_password: newPassword,
@@ -391,9 +411,10 @@ export default function UserSettings({ className = '' }: { className?: string })
                     <div className="flex gap-3">
                         <button
                             onClick={handleDeleteAccount}
-                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                            disabled={loading}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Yes, Delete My Account
+                            {loading ? 'Deleting...' : 'Yes, Delete My Account'}
                         </button>
                         <button
                             onClick={() => setShowDeleteConfirm(false)}
