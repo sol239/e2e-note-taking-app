@@ -19,6 +19,7 @@ const NotebookLinkBlock: React.FC<NotebookLinkBlockProps> = ({ block, onUpdate, 
   const [searchQuery, setSearchQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { notebooks, fetchNotebooks } = useMainView();
@@ -31,6 +32,13 @@ const NotebookLinkBlock: React.FC<NotebookLinkBlockProps> = ({ block, onUpdate, 
       }, 100);
     }
   }, [showNotebookSearch]);
+
+  useEffect(() => {
+    // Set loading to false when notebooks are available
+    if (notebooks.length > 0) {
+      setLoading(false);
+    }
+  }, [notebooks]);
 
   const getFilteredNotebooks = () => {
     if (!searchQuery.trim()) return notebooks;
@@ -198,7 +206,7 @@ const NotebookLinkBlock: React.FC<NotebookLinkBlockProps> = ({ block, onUpdate, 
                 <div className="space-y-2">
                   {getFilteredNotebooks().map((connector, index) => (
                     <button
-                      key={connector.id}
+                      key={connector.notebook.id}
                       onClick={() => handleNotebookSelect(connector)}
                       className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
                         index === selectedIndex

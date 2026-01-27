@@ -6,6 +6,7 @@ import { Pencil, Check, X, User as UserIcon, ShieldCheck, Trash2, AlertTriangle,
 import OTPInput from './OTPInput';
 import { useRouter } from 'next/navigation';
 import { CryptoManager } from '../utils/CryptoManager';
+import toast from 'react-hot-toast';
 
 export default function UserSettings({ className = '' }: { className?: string }) {
   const router = useRouter();
@@ -15,7 +16,6 @@ export default function UserSettings({ className = '' }: { className?: string })
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
   const [tfaData, setTfaData] = useState<TFASetupResponse | null>(null);
   const [tfaCode, setTfaCode] = useState('');
   const [showTfaSetup, setShowTfaSetup] = useState(false);
@@ -26,7 +26,6 @@ export default function UserSettings({ className = '' }: { className?: string })
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [passwordMessage, setPasswordMessage] = useState('');
 
   useEffect(() => {
     fetchUser();
@@ -46,12 +45,11 @@ export default function UserSettings({ className = '' }: { className?: string })
   const handleUpdate = async (field: 'nickname' | 'email') => {
     if (!user) return;
     setLoading(true);
-    setMessage('');
     
     const body = field === 'nickname' ? { nickname } : { email };
 
     try {
-      const response = await fetch('http://localhost:8000/api/user/', {
+      const response = await fetch('http://localhost:8000/api/accounts/user/', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -61,15 +59,15 @@ export default function UserSettings({ className = '' }: { className?: string })
       });
       
       if (response.ok) {
-        setMessage(`${field === 'nickname' ? 'Nickname' : 'Email'} updated successfully`);
+        toast.success(`${field === 'nickname' ? 'Nickname' : 'Email'} updated successfully`);
         if (field === 'nickname') setIsEditingNickname(false);
         if (field === 'email') setIsEditingEmail(false);
         fetchUser();
       } else {
-        setMessage(`Failed to update ${field}`);
+        toast.error(`Failed to update ${field}`);
       }
     } catch (err) {
-      setMessage(`Error updating ${field}`);
+      toast.error(`Error updating ${field}`);
     } finally {
       setLoading(false);
     }
@@ -91,20 +89,20 @@ export default function UserSettings({ className = '' }: { className?: string })
       setTfaData(data);
       setShowTfaSetup(true);
     } catch (err) {
-      setMessage('Failed to start TFA setup');
+      toast.error('Failed to start TFA setup');
     }
   };
 
   const handleTfaEnable = async () => {
     try {
       await tfaEnable(tfaCode);
-      setMessage('Two-Factor Authentication enabled successfully');
+      toast.success('Two-Factor Authentication enabled successfully');
       setShowTfaSetup(false);
       setTfaData(null);
       setTfaCode('');
       fetchUser();
     } catch (err) {
-      setMessage('Failed to enable TFA. Check the code.');
+      toast.error('Failed to enable TFA. Check the code.');
     }
   };
 
@@ -112,10 +110,10 @@ export default function UserSettings({ className = '' }: { className?: string })
     if (!confirm('Are you sure you want to disable Two-Factor Authentication?')) return;
     try {
       await tfaDisable();
-      setMessage('Two-Factor Authentication disabled successfully');
+      toast.success('Two-Factor Authentication disabled successfully');
       fetchUser();
     } catch (err) {
-      setMessage('Failed to disable TFA');
+      toast.error('Failed to disable TFA');
     }
   };
 
@@ -127,7 +125,7 @@ export default function UserSettings({ className = '' }: { className?: string })
         localStorage.removeItem('authToken');
         router.push('/login');
     } catch (err) {
-        setMessage('Failed to delete account');
+        toast.error('Failed to delete account');
         setShowDeleteConfirm(false);
     } finally {
         setLoading(false);
@@ -136,16 +134,15 @@ export default function UserSettings({ className = '' }: { className?: string })
 
   const handleChangePassword = async () => {
     if (newPassword !== confirmNewPassword) {
-        setPasswordMessage('New passwords do not match');
+        toast.error('New passwords do not match');
         return;
     }
     if (newPassword.length < 8) {
-        setPasswordMessage('Password must be at least 8 characters long');
+        toast.error('Password must be at least 8 characters long');
         return;
     }
 
     setLoading(true);
-    setPasswordMessage('');
 
     try {
         // 1. Ensure master key is loaded
@@ -179,16 +176,15 @@ export default function UserSettings({ className = '' }: { className?: string })
             argon_time: 4 // Default value
         });
 
-        setPasswordMessage('Password changed successfully');
+        toast.success('Password changed successfully');
         setTimeout(() => {
             setShowChangePassword(false);
             setCurrentPassword('');
             setNewPassword('');
             setConfirmNewPassword('');
-            setPasswordMessage('');
         }, 2000);
     } catch (err: any) {
-        setPasswordMessage(err.message || 'Failed to change password');
+        toast.error(err.message || 'Failed to change password');
     } finally {
         setLoading(false);
     }
@@ -204,12 +200,6 @@ export default function UserSettings({ className = '' }: { className?: string })
             </div>
             <h2 className="text-lg font-semibold text-gray-900">User Profile</h2>
           </div>
-
-          {message && (
-            <div className={`mb-6 p-3 rounded ${message.includes('Failed') || message.includes('Error') ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-              {message}
-            </div>
-          )}
 
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
@@ -487,7 +477,6 @@ export default function UserSettings({ className = '' }: { className?: string })
                                     setCurrentPassword('');
                                     setNewPassword('');
                                     setConfirmNewPassword('');
-                                    setPasswordMessage('');
                                 }}
                                 disabled={loading}
                                 className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -495,11 +484,6 @@ export default function UserSettings({ className = '' }: { className?: string })
                                 Cancel
                             </button>
                         </div>
-                        {passwordMessage && (
-                            <div className={`mt-3 text-sm ${passwordMessage.includes('Failed') || passwordMessage.includes('match') || passwordMessage.includes('long') ? 'text-red-600' : 'text-green-600'}`}>
-                                {passwordMessage}
-                            </div>
-                        )}
                     </div>
                 </div>
             )}

@@ -11,7 +11,7 @@ interface ExportModalProps {
 }
 
 export default function ExportModal({ notebookId, onClose }: ExportModalProps) {
-  const [exportFormat, setExportFormat] = useState<'html' | 'pdf' | 'markdown' | 'zip'>('html');
+  const [exportFormat, setExportFormat] = useState<'json' | 'zip'>('json');
   const [exporting, setExporting] = useState(false);
 
   const handleExport = async () => {
@@ -47,34 +47,12 @@ export default function ExportModal({ notebookId, onClose }: ExportModalProps) {
               <input
                 type="radio"
                 name="exportFormat"
-                value="html"
-                checked={exportFormat === 'html'}
-                onChange={(e) => setExportFormat(e.target.value as 'html')}
+                value="json"
+                checked={exportFormat === 'json'}
+                onChange={(e) => setExportFormat(e.target.value as 'json')}
                 className="mr-2"
               />
-              HTML
-            </label>
-            <label className="flex items-center text-black">
-              <input
-                type="radio"
-                name="exportFormat"
-                value="pdf"
-                checked={exportFormat === 'pdf'}
-                onChange={(e) => setExportFormat(e.target.value as 'pdf')}
-                className="mr-2"
-              />
-              PDF
-            </label>
-            <label className="flex items-center text-black">
-              <input
-                type="radio"
-                name="exportFormat"
-                value="markdown"
-                checked={exportFormat === 'markdown'}
-                onChange={(e) => setExportFormat(e.target.value as 'markdown')}
-                className="mr-2"
-              />
-              Markdown
+              JSON
             </label>
             <label className="flex items-center text-black">
               <input

@@ -60,10 +60,12 @@ export default function NotebookPage() {
         );
         // Sort blocks by position_id and then position_order
         convertedBlocks.sort((a, b) => {
-          if (a.position_id !== b.position_id) {
-            return a.position_id - b.position_id;
+          const aPosId = a.position_id ?? Number.MAX_SAFE_INTEGER;
+          const bPosId = b.position_id ?? Number.MAX_SAFE_INTEGER;
+          if (aPosId !== bPosId) {
+            return aPosId - bPosId;
           }
-          return a.position_order - b.position_order;
+          return (a.position_order ?? 0) - (b.position_order ?? 0);
         });
         
         setBlocks(convertedBlocks);

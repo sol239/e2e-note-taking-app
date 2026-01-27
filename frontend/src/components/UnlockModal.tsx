@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from 'react';
 import { Lock, Key } from 'lucide-react';
 import { getEncryptedMasterKey } from '../api/auth';
@@ -9,9 +11,10 @@ interface UnlockModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  showCancel?: boolean;
 }
 
-export default function UnlockModal({ isOpen, onClose, onSuccess }: UnlockModalProps) {
+export default function UnlockModal({ isOpen, onClose, onSuccess, showCancel = true }: UnlockModalProps) {
   const router = useRouter();
   const { checkMasterKey } = useMainView();
   const [unlockPassword, setUnlockPassword] = useState('');
@@ -86,7 +89,7 @@ export default function UnlockModal({ isOpen, onClose, onSuccess }: UnlockModalP
               type="password"
               value={unlockPassword}
               onChange={(e) => setUnlockPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-black"
               placeholder="Enter your password"
               autoFocus
             />
@@ -96,21 +99,23 @@ export default function UnlockModal({ isOpen, onClose, onSuccess }: UnlockModalP
           </div>
 
           <div className="flex gap-3 mt-6">
-            <button
-              type="button"
-              onClick={() => {
-                setUnlockError('');
-                setUnlockPassword('');
-                onClose();
-              }}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-            >
-              Cancel
-            </button>
+            {showCancel && (
+              <button
+                type="button"
+                onClick={() => {
+                  setUnlockError('');
+                  setUnlockPassword('');
+                  onClose();
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+              >
+                Cancel
+              </button>
+            )}
             <button
               type="submit"
               disabled={isUnlocking || !unlockPassword}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className={`${showCancel ? 'flex-1' : 'w-full'} px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
             >
               {isUnlocking ? (
                 <>
