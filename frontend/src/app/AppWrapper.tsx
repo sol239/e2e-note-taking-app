@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { usePathname } from "next/navigation";
 import { GlobalSettingsProvider } from "../contexts/GlobalSettingsContext";
 import { MainViewProvider } from "../contexts/MainViewContext";
 import { Toaster } from "react-hot-toast";
@@ -26,11 +27,14 @@ function GlobalUnlockModalWrapper() {
 }
 
 export default function AppWrapper({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isNotebookPage = pathname?.startsWith('/notebooks');
+
   return (
     <GlobalSettingsProvider>
       <MainViewProvider>
         {children}
-        <GlobalUnlockModalWrapper />
+        {isNotebookPage && <GlobalUnlockModalWrapper />}
         <Toaster position="top-right" />
       </MainViewProvider>
     </GlobalSettingsProvider>
